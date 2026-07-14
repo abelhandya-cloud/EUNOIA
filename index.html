@@ -702,12 +702,89 @@
                 </div>
 
                 <!-- Konektivitas Awan Multi-Device (Firebase API Credentials Hub) -->
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 lg:col-span-2">
-                    <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-key mr-2 text-slate-500"></i>Konfigurasi Cloud Gateway Hub (Kredensial SDK Firebase)</h3>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6 lg:col-span-2">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-3">
+                        <h3 class="text-base font-bold text-gray-800 flex items-center">
+                            <i class="fa-solid fa-key mr-2 text-slate-500"></i>Konfigurasi Cloud Gateway Hub (Kredensial SDK Firebase)
+                        </h3>
+                        <!-- Status Badge -->
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-semibold text-gray-500 uppercase">Status:</span>
+                            <span :class="{
+                                'bg-gray-100 text-gray-600': firebaseStatus === 'Belum Terhubung',
+                                'bg-amber-100 text-amber-700 animate-pulse': firebaseStatus === 'Sedang Menguji...' || firebaseStatus === 'Menghubungkan...',
+                                'bg-emerald-100 text-emerald-700 font-bold': firebaseStatus === 'Koneksi Sukses' || firebaseStatus === 'Terhubung',
+                                'bg-red-100 text-red-700 font-bold': firebaseStatus === 'Koneksi Gagal'
+                            }" class="px-2.5 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider">
+                                {{ firebaseStatus }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Kredensial Grid -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div v-for="(val, key) in settings.firebase" :key="key">
                             <label class="block text-[10px] font-bold text-gray-400 uppercase font-mono">{{ key.replace(/([A-Z])/g, ' $1') }}</label>
-                            <input type="text" v-model="settings.firebase[key]" placeholder="Required/Optional" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400">
+                            <input type="text" v-model="settings.firebase[key]" placeholder="Required/Optional" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white">
+                        </div>
+                    </div>
+
+                    <!-- Hub / Action Panel -->
+                    <div class="bg-slate-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="space-y-0.5">
+                                <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wide">Panel Kendali Awan Multi-Device</h4>
+                                <p class="text-[10px] text-gray-400">Sinkronisasikan data murid, presensi, & nilai Anda antar laptop dan handphone secara mulus.</p>
+                            </div>
+                            <!-- UID Display -->
+                            <div v-if="firebaseUserId" class="bg-slate-200/60 px-3 py-1 rounded text-[10px] font-mono text-gray-600 flex items-center">
+                                <i class="fa-solid fa-user-circle mr-1.5"></i> ID: {{ firebaseUserId }}
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex flex-wrap gap-2.5">
+                            <button @click="simpanKonfigurasiFirebase()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition flex items-center">
+                                <i class="fa-solid fa-floppy-disk mr-1.5"></i> Simpan Konfigurasi
+                            </button>
+                            <button @click="ujiKoneksiFirebase()" :disabled="firebaseLoading" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition flex items-center disabled:opacity-50">
+                                <i v-if="firebaseLoading" class="fa-solid fa-circle-notch animate-spin mr-1.5"></i>
+                                <i v-else class="fa-solid fa-vial mr-1.5"></i> Uji Koneksi
+                            </button>
+                            <button @click="hubungkanFirebase()" :disabled="firebaseLoading" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition flex items-center disabled:opacity-50">
+                                <i class="fa-solid fa-plug mr-1.5"></i> Hubungkan Firebase
+                            </button>
+                            <button @click="toggleAutoSync()" :disabled="!firebaseConnected" :class="isAutoSync ? 'bg-red-600 hover:bg-red-700' : 'bg-[#1e293b] hover:bg-slate-800'" class="text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition flex items-center disabled:opacity-50">
+                                <i :class="isAutoSync ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off'" class="mr-1.5"></i> 
+                                {{ isAutoSync ? 'Matikan Auto-Sync' : 'Aktifkan Auto-Sync' }}
+                            </button>
+                        </div>
+
+                        <!-- Manual Upload / Download Trigger -->
+                        <div v-if="firebaseConnected" class="flex items-center gap-2 pt-2 border-t border-gray-200">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase">Aksi Manual:</span>
+                            <button @click="pushKeAwan()" :disabled="firebaseSyncing" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-[10px] font-bold px-3 py-1.5 rounded transition flex items-center disabled:opacity-50">
+                                <i class="fa-solid fa-cloud-arrow-up text-blue-500 mr-1.5"></i> Push ke Awan
+                            </button>
+                            <button @click="tarikDariAwan()" :disabled="firebaseSyncing" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-[10px] font-bold px-3 py-1.5 rounded transition flex items-center disabled:opacity-50">
+                                <i class="fa-solid fa-cloud-arrow-down text-emerald-500 mr-1.5"></i> Tarik dari Awan
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Cloud Synchronizer Interactive Terminal Logs -->
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide flex justify-between items-center">
+                            <span>Sistem Log Aktivitas Sinkronisasi</span>
+                            <button @click="firebaseLog = []" class="text-[10px] text-gray-400 hover:text-red-500 transition font-bold uppercase"><i class="fa-solid fa-trash-can mr-1"></i> Bersihkan</button>
+                        </label>
+                        <div class="bg-slate-900 text-slate-300 p-4 rounded-xl font-mono text-[11px] h-36 overflow-y-auto shadow-inner space-y-1 scrollbar-thin">
+                            <div v-for="log in firebaseLog" :key="log" class="leading-relaxed">
+                                <span class="text-blue-400 font-bold">&gt;&gt;</span> {{ log }}
+                            </div>
+                            <div v-if="firebaseLog.length === 0" class="text-slate-500 italic">
+                                Belum ada aktivitas cloud gateway yang terdaftar. Simpan kredensial dan lakukan pengujian koneksi.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -975,6 +1052,207 @@
 
             const formSiswaCepat = ref({ nis: '', nama: '' });
             const formInput = ref({ newMapel: '' });
+
+            // --- STREAMING_CHUNK: Menginisialisasi State Reaktif Gateway Cloud Firebase ---
+            const firebaseConnected = ref(false);
+            const firebaseLoading = ref(false);
+            const firebaseStatus = ref('Belum Terhubung');
+            const firebaseUserId = ref('');
+            const firebaseSyncing = ref(false);
+            const firebaseLog = ref([]);
+            const isAutoSync = ref(false);
+            
+            let dbInstance = null;
+            let authInstance = null;
+            let unsubscribeSync = null;
+
+            const addLog = (msg) => {
+                firebaseLog.value.unshift(`[${new Date().toLocaleTimeString()}] ${msg}`);
+                if (firebaseLog.value.length > 50) firebaseLog.value.pop();
+            };
+
+            // --- STREAMING_CHUNK: Menyediakan Fungsi Utama Logika Sinkronisasi SDK Firebase ---
+            const initFirebaseAndAuth = async (config) => {
+                if (!config.apiKey || !config.projectId) {
+                    throw new Error("API Key dan Project ID minimal harus terisi agar dapat melakukan inisialisasi.");
+                }
+
+                // Melakukan impor SDK Firebase secara dinamis
+                const { initializeApp, getApps, getApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
+                const { getAuth, signInAnonymously, signInWithCustomToken } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
+                const { getFirestore } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+
+                let app;
+                const apps = getApps();
+                if (apps.length === 0) {
+                    app = initializeApp(config);
+                } else {
+                    app = getApp();
+                }
+
+                authInstance = getAuth(app);
+                dbInstance = getFirestore(app);
+
+                let userCredential;
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    userCredential = await signInWithCustomToken(authInstance, __initial_auth_token);
+                } else {
+                    userCredential = await signInAnonymously(authInstance);
+                }
+
+                return { app, db: dbInstance, auth: authInstance, user: userCredential.user };
+            };
+
+            const simpanKonfigurasiFirebase = () => {
+                saveToLocal();
+                addLog('Konfigurasi kredensial Firebase lokal berhasil diperbarui!');
+            };
+
+            const ujiKoneksiFirebase = async () => {
+                firebaseLoading.value = true;
+                firebaseStatus.value = 'Sedang Menguji...';
+                addLog('Menginisialisasi uji koneksi SDK...');
+                try {
+                    const { user } = await initFirebaseAndAuth(settings.value.firebase);
+                    firebaseConnected.value = true;
+                    firebaseStatus.value = 'Koneksi Sukses';
+                    firebaseUserId.value = user.uid;
+                    addLog(`Koneksi sukses! ID Pengguna Terotentikasi: ${user.uid}`);
+                } catch (err) {
+                    firebaseConnected.value = false;
+                    firebaseStatus.value = 'Koneksi Gagal';
+                    addLog(`Gagal terhubung: ${err.message}`);
+                } finally {
+                    firebaseLoading.value = false;
+                }
+            };
+
+            const hubungkanFirebase = async () => {
+                firebaseLoading.value = true;
+                firebaseStatus.value = 'Menghubungkan...';
+                addLog('Menjalankan proses integrasi Gateway Hub...');
+                try {
+                    const { user } = await initFirebaseAndAuth(settings.value.firebase);
+                    firebaseConnected.value = true;
+                    firebaseStatus.value = 'Terhubung';
+                    firebaseUserId.value = user.uid;
+                    addLog('Berhasil mengunci koneksi gateway ke Firebase Cloud.');
+                    // Tawarkan sinkronisasi awal
+                    await tarikDariAwan();
+                } catch (err) {
+                    firebaseConnected.value = false;
+                    firebaseStatus.value = 'Koneksi Gagal';
+                    addLog(`Koneksi ditolak: ${err.message}`);
+                } finally {
+                    firebaseLoading.value = false;
+                }
+            };
+
+            const pushKeAwan = async () => {
+                if (!firebaseConnected.value) return addLog('Gagal: Hubungkan aplikasi ke gateway cloud terlebih dahulu.');
+                firebaseSyncing.value = true;
+                addLog('Menunggah data lokal ke cloud...');
+                try {
+                    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'eunoia-kelas-app';
+                    
+                    // Gunakan rute terstruktur yang valid (RULE 1)
+                    const docRef = doc(dbInstance, 'artifacts', appId, 'users', firebaseUserId.value, 'backup', 'current');
+                    
+                    const payload = {
+                        datastore: JSON.parse(JSON.stringify(datastore.value)),
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    await setDoc(docRef, payload);
+                    addLog('Sukses! Seluruh data lokal telah tersinkronisasi di Awan.');
+                } catch (err) {
+                    addLog(`Gagal mengunggah data: ${err.message}`);
+                } finally {
+                    firebaseSyncing.value = false;
+                }
+            };
+
+            const tarikDariAwan = async () => {
+                if (!firebaseConnected.value) return addLog('Gagal: Silakan hubungkan Firebase terlebih dahulu.');
+                firebaseSyncing.value = true;
+                addLog('Mengunduh data cadangan dari Awan...');
+                try {
+                    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'eunoia-kelas-app';
+                    
+                    const docRef = doc(dbInstance, 'artifacts', appId, 'users', firebaseUserId.value, 'backup', 'current');
+                    const snap = await getDoc(docRef);
+
+                    if (snap.exists()) {
+                        const cloudData = snap.data();
+                        if (cloudData.datastore) {
+                            datastore.value = cloudData.datastore;
+                            addLog('Sukses! Data lokal diperbarui sepenuhnya dari data Awan.');
+                        } else {
+                            addLog('Peringatan: Dokumen cloud ditemukan tetapi data kosong.');
+                        }
+                    } else {
+                        addLog('Info: Belum ditemukan cadangan data di cloud. Menulis data saat ini...');
+                        await pushKeAwan();
+                    }
+                } catch (err) {
+                    addLog(`Gagal mengunduh: ${err.message}`);
+                } finally {
+                    firebaseSyncing.value = false;
+                }
+            };
+
+            const toggleAutoSync = async () => {
+                if (isAutoSync.value) {
+                    if (unsubscribeSync) {
+                        unsubscribeSync();
+                        unsubscribeSync = null;
+                    }
+                    isAutoSync.value = false;
+                    addLog('Sinkronisasi otomatis dihentikan.');
+                } else {
+                    if (!firebaseConnected.value) {
+                        await hubungkanFirebase();
+                        if (!firebaseConnected.value) return;
+                    }
+                    try {
+                        const { doc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                        const appId = typeof __app_id !== 'undefined' ? __app_id : 'eunoia-kelas-app';
+                        const docRef = doc(dbInstance, 'artifacts', appId, 'users', firebaseUserId.value, 'backup', 'current');
+
+                        addLog('Menjalankan pendengar sinkronisasi langsung...');
+                        
+                        unsubscribeSync = onSnapshot(docRef, (docSnap) => {
+                            if (docSnap.exists()) {
+                                const cloudData = docSnap.data();
+                                if (cloudData.datastore) {
+                                    // Cegah penulisan ulang jika isinya sama persis
+                                    if (JSON.stringify(datastore.value) !== JSON.stringify(cloudData.datastore)) {
+                                        datastore.value = cloudData.datastore;
+                                        addLog('Sinkronisasi Berhasil: Data diperbarui secara real-time dari perangkat lain.');
+                                    }
+                                }
+                            }
+                        }, (err) => {
+                            addLog(`Sistem Sinkronisasi Berhenti: ${err.message}`);
+                            isAutoSync.value = false;
+                        });
+
+                        isAutoSync.value = true;
+                        addLog('Sistem Auto-Sync real-time aktif!');
+                        
+                        // Buat unggahan berkala saat terjadi perubahan data lokal
+                        watch(datastore, () => {
+                            if (isAutoSync.value && firebaseConnected.value) {
+                                pushKeAwan();
+                            }
+                        }, { deep: true });
+                    } catch (err) {
+                        addLog(`Gagal mengaktifkan Auto-Sync: ${err.message}`);
+                    }
+                }
+            };
 
             // --- MODAL WINDOW CONTROL ---
             const modal = ref({
@@ -1666,7 +1944,10 @@
                 siswaTerfilterNilai, getNilaiObj, exportNilaiExcel, isKelas6String, siswaKelas6, getUjian6Obj, siswaTerfilterOlahan, 
                 hitungRerataKomponen, hitungNilaiAkhir, jurnalTerfilter, catatanTerfilter, openModalJurnal, simpanJurnal, hapusJurnal, openModalCatatan, 
                 simpanCatatan, hapusCatatan, getNamaSiswaById, exportRekapPresensiExcelModulH, exportRekapNilaiExcelModulH, triggerPrintRekap, tambahMapelOpt, hapusMapelOpt, downloadBackupJSON, 
-                uploadRestoreJSON, triggerPrint, printMeta, formatTanggalIndo
+                uploadRestoreJSON, triggerPrint, printMeta, formatTanggalIndo,
+                // Ekspor State & Fungsi Baru Firebase ke VM Vue
+                firebaseConnected, firebaseLoading, firebaseStatus, firebaseUserId, firebaseSyncing, firebaseLog, isAutoSync,
+                simpanKonfigurasiFirebase, ujiKoneksiFirebase, hubungkanFirebase, pushKeAwan, tarikDariAwan, toggleAutoSync
             };
         }
     }).mount('#app');
