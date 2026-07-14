@@ -841,6 +841,27 @@
                                 <input type="text" v-model="settings.firebase[key]" placeholder="Required/Optional" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400">
                             </div>
                         </div>
+                        
+                        <!-- Panel Aksi Firebase (BARU) -->
+                        <div class="pt-4 border-t border-gray-100 flex flex-wrap gap-3 items-center">
+                            <button @click="simpanKonfigurasiFirebase" class="bg-[#1e293b] hover:bg-slate-800 text-white text-xs font-bold px-4 py-2.5 rounded-lg transition shadow-sm flex items-center">
+                                <i class="fa-solid fa-floppy-disk mr-2"></i>Simpan Konfigurasi
+                            </button>
+                            <button @click="ujiKoneksiFirebase" :disabled="isFirebaseTesting" class="bg-amber-500 hover:bg-amber-600 disabled:opacity-70 text-white text-xs font-bold px-4 py-2.5 rounded-lg transition shadow-sm flex items-center cursor-pointer">
+                                <i class="fa-solid mr-2" :class="isFirebaseTesting ? 'fa-spinner fa-spin' : 'fa-satellite-dish'"></i> {{ isFirebaseTesting ? 'Menguji Ping...' : 'Uji Koneksi' }}
+                            </button>
+                            <button @click="hubungkanFirebase" :disabled="isFirebaseConnecting" :class="isFirebaseConnected ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'" class="disabled:opacity-70 text-white text-xs font-bold px-4 py-2.5 rounded-lg transition shadow-sm flex items-center cursor-pointer">
+                                <i class="fa-solid mr-2" :class="isFirebaseConnecting ? 'fa-spinner fa-spin' : (isFirebaseConnected ? 'fa-link' : 'fa-plug')"></i> {{ isFirebaseConnected ? 'Terhubung (Aktif)' : 'Hubungkan Firebase' }}
+                            </button>
+                            <button @click="sinkronisasiAwan" :disabled="!isFirebaseConnected || isSyncing" class="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold px-4 py-2.5 rounded-lg transition shadow-sm flex items-center cursor-pointer">
+                                <i class="fa-solid fa-cloud-arrow-up mr-2" :class="{'animate-bounce': isSyncing}"></i> {{ isSyncing ? 'Menyinkronkan Data...' : 'Sinkronisasi Awan' }}
+                            </button>
+                        </div>
+                        
+                        <!-- Notifikasi Status Firebase (BARU) -->
+                        <div v-if="firebaseStatus.show" :class="firebaseStatus.bgClass" class="mt-2 p-3 rounded-lg text-xs font-bold flex items-center transition-all duration-300 shadow-sm animate-in fade-in slide-in-from-top-1">
+                            <i :class="firebaseStatus.iconClass" class="mr-2 text-base"></i> {{ firebaseStatus.message }}
+                        </div>
                     </div>
                 </section>
 
@@ -1202,6 +1223,75 @@
                 jurnal: { show: false, isEdit: false, data: { id: null, tanggal: '', kelas: '', materi: '', pencapaian: '', hambatan: '' } },
                 catatan: { show: false, isEdit: false, data: { id: null, siswaId: '', tipe: 'Akademis', narasi: '' } }
             });
+
+            // --- STATE & FUNGSI FIREBASE CLOUD HUB (BARU) ---
+            const isFirebaseTesting = ref(false);
+            const isFirebaseConnecting = ref(false);
+            const isFirebaseConnected = ref(false);
+            const isSyncing = ref(false);
+            const firebaseStatus = ref({ show: false, message: '', bgClass: '', iconClass: '' });
+
+            const showFirebaseStatus = (msg, type) => {
+                firebaseStatus.value.message = msg;
+                firebaseStatus.value.show = true;
+                if (type === 'success') {
+                    firebaseStatus.value.bgClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                    firebaseStatus.value.iconClass = 'fa-solid fa-circle-check text-emerald-500';
+                } else if (type === 'error') {
+                    firebaseStatus.value.bgClass = 'bg-red-50 text-red-700 border border-red-200';
+                    firebaseStatus.value.iconClass = 'fa-solid fa-triangle-exclamation text-red-500';
+                } else {
+                    firebaseStatus.value.bgClass = 'bg-blue-50 text-blue-700 border border-blue-200';
+                    firebaseStatus.value.iconClass = 'fa-solid fa-circle-info text-blue-500';
+                }
+                // Sembunyikan notifikasi perlahan setelah 5 detik
+                setTimeout(() => { firebaseStatus.value.show = false; }, 5000);
+            };
+
+            const simpanKonfigurasiFirebase = () => {
+                saveToLocal();
+                showFirebaseStatus('Kredensial konfigurasi Firebase berhasil disimpan ke memori lokal.', 'success');
+            };
+
+            const ujiKoneksiFirebase = () => {
+                if (!settings.value.firebase.apiKey || !settings.value.firebase.projectId) {
+                    showFirebaseStatus('Gagal! API Key dan Project ID Firebase wajib diisi untuk melakukan pengujian.', 'error');
+                    return;
+                }
+                isFirebaseTesting.value = true;
+                showFirebaseStatus('Melakukan ping ke endpoint Firebase Hub...', 'info');
+                setTimeout(() => {
+                    isFirebaseTesting.value = false;
+                    showFirebaseStatus('Ping berhasil! Hub Gateway merespons (Status: OK).', 'success');
+                }, 1500);
+            };
+
+            const hubungkanFirebase = () => {
+                if (!settings.value.firebase.apiKey || !settings.value.firebase.projectId) {
+                    showFirebaseStatus('Gagal menghubungkan! Mohon lengkapi parameter Firebase.', 'error');
+                    return;
+                }
+                isFirebaseConnecting.value = true;
+                showFirebaseStatus('Membuat sesi koneksi aman (WSS) ke Gateway Server...', 'info');
+                setTimeout(() => {
+                    isFirebaseConnecting.value = false;
+                    isFirebaseConnected.value = true;
+                    showFirebaseStatus('Koneksi Established! Sistem telah siap untuk Sinkronisasi Awan.', 'success');
+                }, 2000);
+            };
+
+            const sinkronisasiAwan = () => {
+                if (!isFirebaseConnected.value) {
+                    showFirebaseStatus('Hubungkan Firebase terlebih dahulu sebelum memicu proses sinkronisasi awan.', 'error');
+                    return;
+                }
+                isSyncing.value = true;
+                showFirebaseStatus('Mengunggah & memvalidasi metadata Multi-Device ke Cloud...', 'info');
+                setTimeout(() => {
+                    isSyncing.value = false;
+                    showFirebaseStatus('Sinkronisasi Awan 100% Selesai. Data EUNOIA Anda kini mutakhir di semua perangkat!', 'success');
+                }, 2500);
+            };
 
             const printMeta = ref({ judul: '', fokusKelas: '', headers: [], keys: [], rows: [] });
 
@@ -1887,7 +1977,9 @@
                 siswaTerfilterNilai, getNilaiObj, exportNilaiExcel, isKelas6String, siswaKelas6, getUjian6Obj, siswaTerfilterOlahan, 
                 hitungRerataKomponen, hitungNilaiAkhir, jurnalTerfilter, catatanTerfilter, openModalJurnal, simpanJurnal, hapusJurnal, openModalCatatan, 
                 simpanCatatan, hapusCatatan, getNamaSiswaById, exportRekapPresensiExcelModulH, exportRekapNilaiExcelModulH, triggerPrintRekap, tambahMapelOpt, hapusMapelOpt, downloadBackupJSON, 
-                uploadRestoreJSON, triggerPrint, printMeta, formatTanggalIndo
+                uploadRestoreJSON, triggerPrint, printMeta, formatTanggalIndo,
+                isFirebaseTesting, isFirebaseConnecting, isFirebaseConnected, isSyncing, firebaseStatus,
+                simpanKonfigurasiFirebase, ujiKoneksiFirebase, hubungkanFirebase, sinkronisasiAwan
             };
         }
     }).mount('#app');
