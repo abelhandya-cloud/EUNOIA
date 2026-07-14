@@ -1,247 +1,1244 @@
-/**
- * doGet handles HTML rendering for the parent portal UI
- * and handles JSON API requests if parameters are provided.
- */
-function doGet(e) {
-  // Check if search query by NIS is requested via API
-  if (e && e.parameter && e.parameter.nis) {
-    try {
-      var studentData = searchStudentByNisBackend(e.parameter.nis);
-      return ContentService.createTextOutput(JSON.stringify(studentData))
-        .setMimeType(ContentService.MimeType.JSON);
-    } catch(err) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-
-  // Otherwise, render the Parent Portal UI (Index.html)
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle('Portal Wali Murid - EUNOIA')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-
-/**
- * doPost handles the secure sync data payload from EUNOIA React App.
- * Resolves classic CORS redirection issues by returning plain-text / JSON string.
- */
-function doPost(e) {
-  try {
-    if (!e || !e.postData || !e.postData.contents) {
-      throw new Error("No payload contents found in the POST request.");
-    }
-
-    var payload = JSON.parse(e.postData.contents);
-    var syncResult = writeDataToSheets(payload);
-    
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      message: "Sync completed successfully!",
-      syncedClasses: syncResult.syncedClasses,
-      totalStudents: syncResult.totalStudents
-    })).setMimeType(ContentService.MimeType.JSON);
-    
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: "Sync failed: " + error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-/**
- * Dynamic sheet recovery or creation helper.
- */
-function getOrCreateSheet(ss, sheetName) {
-  var sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
-  }
-  return sheet;
-}
-
-/**
- * Organizes and writes sync payload structured into sheets.
- */
-function writeDataToSheets(data) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  // 1. Write metadata / profile sheet
-  var metaSheet = getOrCreateSheet(ss, "PROFIL_SEKOLAH");
-  metaSheet.clear();
-  metaSheet.appendRow(["PARAMETER", "VALUE"]);
-  metaSheet.appendRow(["Nama Sekolah", data.schoolName || "-"]);
-  metaSheet.appendRow(["Nama Guru", data.teacherName || "-"]);
-  metaSheet.appendRow(["Mata Pelajaran", data.subject || "-"]);
-  metaSheet.appendRow(["Semester Aktif", data.semester || "-"]);
-  metaSheet.appendRow(["Terakhir Sinkron", new Date().toLocaleString("id-ID")]);
-  metaSheet.getRange("A1:B1").setFontWeight("bold").setBackground("#f1f5f9");
-  metaSheet.autoResizeColumns(1, 2);
-
-  // Keep records of classes and count
-  var classCount = 0;
-  var studentTotal = 0;
-
-  // Prepare database arrays
-  var siswaRows = [["NIS", "NAMA SISWA", "ROMBEL KELAS"]];
-  var nilaiRows = [["NIS", "NAMA SISWA", "ROMBEL KELAS", "SEMESTER", "MATA PELAJARAN", "RATA FORMATIF (HARIAN)", "RATA SUMATIF (BAB)", "ASTS", "ASAS", "NILAI AKHIR RAPOR"]];
-  var kehadiranRows = [["NIS", "NAMA SISWA", "ROMBEL KELAS", "SEMESTER", "HADIR (H)", "SAKIT (S)", "IZIN (I)", "ALPA (A)"]];
-
-  var studentsDb = data.students || {};
-  var gradesDb = data.grades || {};
-  var attendanceDb = data.attendanceList || {};
-  var weights = (data.gradeConfig && data.gradeConfig.weights) ? data.gradeConfig.weights : { formatif: 30, sumatif: 30, asts: 20, asas: 20 };
-  var tps = (data.gradeConfig && data.gradeConfig.tps) ? data.gradeConfig.tps : [];
-  var sumatifs = (data.gradeConfig && data.gradeConfig.sumatifs) ? data.gradeConfig.sumatifs : [];
-
-  for (var className in studentsDb) {
-    classCount++;
-    var studentList = studentsDb[className] || [];
-    
-    for (var i = 0; i < studentList.length; i++) {
-      var s = studentList[i];
-      studentTotal++;
-      
-      // Push basic info
-      siswaRows.push([s.nis, s.name, className]);
-
-      // Calculate grades dynamically from active payload
-      var gradeKey = data.semester + "_" + data.subject + "_" + s.id;
-      var g = gradesDb[gradeKey] || {};
-
-      var totalF = 0;
-      tps.forEach(function(tp) { totalF += (g[tp.id] || 0); });
-      var avgF = tps.length > 0 ? totalF / tps.length : 0;
-
-      var totalS = 0;
-      sumatifs.forEach(function(sm) { totalS += (g[sm.id] || 0); });
-      var avgS = sumatifs.length > 0 ? totalS / sumatifs.length : 0;
-
-      var astsVal = g.asts || 0;
-      var asasVal = g.asas || 0;
-
-      var finalGrade = (avgF * (weights.formatif / 100)) + 
-                       (avgS * (weights.sumatif / 100)) + 
-                       (astsVal * (weights.asts / 100)) + 
-                       (asasVal * (weights.asas / 100));
-
-      nilaiRows.push([
-        s.nis, s.name, className, data.semester, data.subject,
-        Math.round(avgF), Math.round(avgS), astsVal, asasVal, Math.round(finalGrade)
-      ]);
-
-      // Process attendance records dynamically
-      var hCount = 0, sCount = 0, iCount = 0, aCount = 0;
-      for (var attKey in attendanceDb) {
-        if (attKey.indexOf(className + "_" + data.semester + "_") === 0) {
-          var status = attendanceDb[attKey][s.id];
-          if (status === 'H') hCount++;
-          if (status === 'S') sCount++;
-          if (status === 'I') iCount++;
-          if (status === 'A') aCount++;
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EUNOIA - Aplikasi Administrasi Guru</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS (Excel Export) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none !important; }
         }
-      }
+        /* Custom scrollbar for clean UI */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800 antialiased">
 
-      kehadiranRows.push([
-        s.nis, s.name, className, data.semester, hCount, sCount, iCount, aCount
-      ]);
-    }
-  }
+<div id="app" class="flex min-h-screen relative" v-cloak>
+    
+    <!-- SIDEBAR -->
+    <aside :style="{ backgroundColor: settings.themeColor }" class="w-64 min-h-screen shadow-xl transition-all duration-300 no-print flex flex-col justify-between">
+        <div>
+            <!-- App Logo / Header -->
+            <div class="p-6 border-b border-black/10 flex items-center space-x-3">
+                <div class="bg-white p-2 rounded-lg shadow-sm">
+                    <i class="fa-solid copperplate fa-graduation-cap text-xl text-gray-700"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-wider" :class="sidebarTextColor">EUNOIA</h1>
+                    <span class="text-xs opacity-75 block" :class="sidebarTextColor">v1.0 - Admin Guru</span>
+                </div>
+            </div>
 
-  // 2. Write basic students list sheet
-  var siswaSheet = getOrCreateSheet(ss, "DATA_SISWA");
-  siswaSheet.clear();
-  siswaSheet.getRange(1, 1, siswaRows.length, siswaRows[0].length).setValues(siswaRows);
-  siswaSheet.getRange("A1:C1").setFontWeight("bold").setBackground("#e2e8f0");
-  siswaSheet.autoResizeColumns(1, 3);
+            <!-- Navigation Links -->
+            <nav class="mt-6 px-4 space-y-1">
+                <button v-for="menu in menus" :key="menu.id" 
+                        @click="currentMenu = menu.id"
+                        :class="[currentMenu === menu.id ? 'bg-white/20 font-semibold shadow-inner' : 'hover:bg-white/10 opacity-90', 'w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition duration-200', sidebarTextColor]">
+                    <i :class="[menu.icon, 'w-5 text-center']"></i>
+                    <span>{{ menu.name }}</span>
+                </button>
+            </nav>
+        </div>
 
-  // 3. Write processed grades ledger
-  var nilaiSheet = getOrCreateSheet(ss, "REKAP_NILAI");
-  nilaiSheet.clear();
-  nilaiSheet.getRange(1, 1, nilaiRows.length, nilaiRows[0].length).setValues(nilaiRows);
-  nilaiSheet.getRange("A1:J1").setFontWeight("bold").setBackground("#cbd5e1");
-  nilaiSheet.autoResizeColumns(1, 10);
+        <!-- Footer Sidebar -->
+        <div class="p-4 border-t border-black/10 text-center text-xs opacity-70" :class="sidebarTextColor">
+            {{ settings.mapelAktif || 'Belum Pilih Mapel' }}<br>Semester {{ settings.semester }}
+        </div>
+    </aside>
 
-  // 4. Write attendance ledger
-  var kehadiranSheet = getOrCreateSheet(ss, "REKAP_KEHADIRAN");
-  kehadiranSheet.clear();
-  kehadiranSheet.getRange(1, 1, kehadiranRows.length, kehadiranRows[0].length).setValues(kehadiranRows);
-  kehadiranSheet.getRange("A1:H1").setFontWeight("bold").setBackground("#dfe7f6");
-  kehadiranSheet.autoResizeColumns(1, 8);
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-x-hidden">
+        
+        <!-- TOPBAR -->
+        <header class="bg-white shadow-sm border-b border-gray-100 px-8 py-4 flex justify-between items-center no-print">
+            <div>
+                <h2 class="text-xl font-bold text-gray-800 capitalize">{{ currentMenu.replace('-', ' ') }}</h2>
+                <p class="text-xs text-gray-500 mt-0.5">{{ settings.namaSekolah }} • Tahun Ajaran {{ settings.tahunAjaran }}</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="text-right">
+                    <span class="block text-sm font-semibold text-gray-700">{{ settings.namaGuru }}</span>
+                    <span class="block text-xs text-gray-400">NIP. {{ settings.nipGuru || '-' }}</span>
+                </div>
+                <div class="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold shadow-sm">
+                    {{ settings.namaGuru ? settings.namaGuru.charAt(0).toUpperCase() : 'G' }}
+                </div>
+            </div>
+        </header>
 
-  return {
-    syncedClasses: classCount,
-    totalStudents: studentTotal
-  };
-}
+        <!-- APP CONTENT BODY -->
+        <div class="p-8 flex-1 overflow-y-auto no-print">
+            
+            <!-- ====== MODUL A: DATA SISWA ====== -->
+            <section v-if="currentMenu === 'data-siswa'" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-bold text-gray-800">Manajemen Biodata Siswa</h3>
+                    <div class="space-x-2">
+                        <button @click="openModalSiswa()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Tambah Siswa</button>
+                        <button @click="triggerPrint('Data Siswa')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-print mr-2"></i>Cetak PDF</button>
+                    </div>
+                </div>
 
-/**
- * Backend fetch function to let parent query records instantly using NIS.
- * Triggered securely by google.script.run from Index.html
- */
-function searchStudentByNisBackend(nis) {
-  if (!nis) return null;
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  // Fetch from Rekap Nilai & Rekap Kehadiran
-  var nilaiSheet = ss.getSheetByName("REKAP_NILAI");
-  var hadirSheet = ss.getSheetByName("REKAP_KEHADIRAN");
-  var profilSheet = ss.getSheetByName("PROFIL_SEKOLAH");
-  
-  if (!nilaiSheet || !hadirSheet) {
-    return { status: "empty", message: "Database sekolah belum disinkronkan oleh guru pengajar." };
-  }
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
+                            <tr>
+                                <th class="p-4 w-16 text-center">No</th>
+                                <th class="p-4">NIS / NISN</th>
+                                <th class="p-4">Nama Lengkap</th>
+                                <th class="p-4 text-center">Kelas Rombel</th>
+                                <th class="p-4 text-center w-32">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="(siswa, idx) in datastore.siswa" :key="siswa.id" class="hover:bg-gray-50/70 transition">
+                                <td class="p-4 text-center text-gray-500">{{ idx + 1 }}</td>
+                                <td class="p-4 font-mono text-gray-600">{{ siswa.nis }}</td>
+                                <td class="p-4 font-semibold text-gray-700">{{ siswa.nama }}</td>
+                                <td class="p-4 text-center"><span class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md text-xs font-semibold">{{ siswa.kelas }}</span></td>
+                                <td class="p-4 text-center space-x-1">
+                                    <button @click="openModalSiswa(siswa)" class="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
+                                    <button @click="hapusSiswa(siswa.id)" class="text-red-600 hover:bg-red-50 p-2 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
+                                </td>
+                            </tr>
+                            <tr v-if="datastore.siswa.length === 0">
+                                <td colspan="5" class="p-8 text-center text-gray-400">Belum ada data siswa. Silakan klik Tambah Siswa.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
-  var schoolName = "Sekolah";
-  if (profilSheet) {
-    var metaValues = profilSheet.getDataRange().getValues();
-    for (var m = 0; m < metaValues.length; m++) {
-      if (metaValues[m][0] === "Nama Sekolah") schoolName = metaValues[m][1];
-    }
-  }
+            <!-- ====== MODUL B: PRESENSI ====== -->
+            <section v-if="currentMenu === 'presensi'" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Daftar Hadir Siswa</h3>
+                        <div class="flex gap-4 mt-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase">Tanggal Presensi</label>
+                                <input type="date" v-model="filter.tanggalPresensi" class="mt-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase">Filter Kelas</label>
+                                <select v-model="filter.kelasPresensi" class="mt-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none">
+                                    <option value="Semua">Semua Kelas</option>
+                                    <option v-for="k in listRombel" :value="k">{{ k }}</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-x-2 self-end">
+                        <button @click="exportPresensiExcel()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-file-excel mr-2"></i>Unduh Rekap Excel</button>
+                        <button @click="triggerPrint('Presensi')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-print mr-2"></i>Cetak PDF</button>
+                    </div>
+                </div>
 
-  var nilaiData = nilaiSheet.getDataRange().getValues();
-  var studentFound = null;
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
+                            <tr>
+                                <th class="p-4 w-16 text-center">No</th>
+                                <th class="p-4">Nama Siswa</th>
+                                <th class="p-4 text-center">Kelas</th>
+                                <th class="p-4 text-center w-72">Status Kehadiran</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="(siswa, idx) in siswaTerfilterPresensi" :key="siswa.id" class="hover:bg-gray-50/70 transition">
+                                <td class="p-4 text-center text-gray-500">{{ idx + 1 }}</td>
+                                <td class="p-4 font-semibold text-gray-700">{{ siswa.nama }}</td>
+                                <td class="p-4 text-center"><span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-semibold">{{ siswa.kelas }}</span></td>
+                                <td class="p-4 text-center">
+                                    <div class="inline-flex rounded-lg border border-gray-200 p-1 bg-gray-50 space-x-1">
+                                        <button v-for="status in ['H', 'S', 'I', 'A']" 
+                                                @click="setPresensi(siswa.id, status)"
+                                                :class="getPresensiClass(siswa.id, status)"
+                                                class="w-10 py-1 text-xs font-bold rounded-md transition duration-150">
+                                            {{ status }}
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr v-if="siswaTerfilterPresensi.length === 0">
+                                <td colspan="4" class="p-8 text-center text-gray-400">Tidak ada siswa yang sesuai filter kelas atau data siswa kosong.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
-  // Search in Grades sheet
-  for (var r = 1; r < nilaiData.length; r++) {
-    if (String(nilaiData[r][0]).trim() === String(nis).trim()) {
-      studentFound = {
-        nis: nilaiData[r][0],
-        name: nilaiData[r][1],
-        className: nilaiData[r][2],
-        semester: nilaiData[r][3],
-        subject: nilaiData[r][4],
-        formatif: nilaiData[r][5],
-        sumatif: nilaiData[r][6],
-        asts: nilaiData[r][7],
-        asas: nilaiData[r][8],
-        finalGrade: nilaiData[r][9],
-        schoolName: schoolName
-      };
-      break;
-    }
-  }
+            <!-- ====== MODUL C: MANAJEMEN BAB & TP ====== -->
+            <section v-if="currentMenu === 'bab-tp'" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Manajemen Bab & Tujuan Pembelajaran (TP)</h3>
+                        <p class="text-xs text-gray-400 mt-0.5">Atur capaian kurikulum per mata pelajaran sebelum menginput nilai.</p>
+                    </div>
+                    <button @click="openModalBab()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Tambah Bab / TP</button>
+                </div>
 
-  if (!studentFound) {
-    return { status: "not_found", message: "Siswa dengan NIS " + nis + " tidak ditemukan." };
-  }
+                <div class="grid grid-cols-1 gap-4">
+                    <div v-for="(b, idx) in datastore.bab" :key="b.id" class="border border-gray-100 rounded-xl bg-gray-50/50 p-5 flex justify-between items-start hover:shadow-sm transition">
+                        <div>
+                            <span class="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">Bab {{ b.nomor }}</span>
+                            <h4 class="text-base font-bold text-gray-800 mt-2">{{ b.nama }}</h4>
+                            <p class="text-sm text-gray-600 mt-1"><strong class="text-xs text-gray-400 block uppercase font-semibold mt-2">Tujuan Pembelajaran (TP):</strong>{{ b.tp }}</p>
+                        </div>
+                        <div class="flex space-x-1">
+                            <button @click="openModalBab(b)" class="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition"><i class="fa-solid fa-pen"></i></button>
+                            <button @click="hapusBab(b.id)" class="text-red-600 hover:bg-red-50 p-2 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div v-if="datastore.bab.length === 0" class="p-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                        Belum ada matriks Bab dan TP yang dibuat.
+                    </div>
+                </div>
+            </section>
 
-  // Fetch Attendance matching NIS
-  var hadirData = hadirSheet.getDataRange().getValues();
-  for (var h = 1; h < hadirData.length; h++) {
-    if (String(hadirData[h][0]).trim() === String(nis).trim()) {
-      studentFound.attendance = {
-        hadir: hadirData[h][4],
-        sakit: hadirData[h][5],
-        izin: hadirData[h][6],
-        alpa: hadirData[h][7]
-      };
-      break;
-    }
-  }
+            <!-- ====== MODUL D: INPUT NILAI ====== -->
+            <section v-if="currentMenu === 'input-nilai'" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Penginputan Evaluasi Belajar</h3>
+                        <div class="flex flex-wrap gap-3 mt-2">
+                            <select v-model="filter.kelasNilai" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none">
+                                <option value="" disabled>-- Pilih Kelas --</option>
+                                <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
+                            </select>
+                            <select v-model="filter.babNilai" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none">
+                                <option value="" disabled>-- Pilih Acuan Bab --</option>
+                                <option v-for="b in datastore.bab" :value="b.id">Bab {{ b.nomor }}: {{ b.nama }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="space-x-2 self-end lg:self-center">
+                        <button @click="exportNilaiExcel()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-file-excel mr-2"></i>Unduh Nilai Harian</button>
+                        <button @click="triggerPrint('Input Nilai')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-print mr-2"></i>Cetak PDF</button>
+                    </div>
+                </div>
 
-  return { status: "found", data: studentFound };
-}
+                <div v-if="!filter.kelasNilai || !filter.babNilai" class="p-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                    <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300 block"></i> Harap pilih filter Kelas dan Acuan Bab terlebih dahulu untuk memunculkan lembar penilaian.
+                </div>
+
+                <div v-else class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
+                            <tr>
+                                <th class="p-4 w-12 text-center">No</th>
+                                <th class="p-4 w-64">Nama Siswa</th>
+                                <th class="p-4 text-center bg-emerald-50/50 w-32">Formatif (Harian)</th>
+                                <th class="p-4 text-center bg-blue-50/50 w-32">Sumatif (Bab)</th>
+                                <th class="p-4 text-center w-28">ASTS</th>
+                                <th class="p-4 text-center w-28">ASAS</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="(siswa, idx) in siswaTerfilterNilai" :key="siswa.id" class="hover:bg-gray-50/50">
+                                <td class="p-4 text-center text-gray-500">{{ idx + 1 }}</td>
+                                <td class="p-4 font-semibold text-gray-700">{{ siswa.nama }}</td>
+                                <td class="p-3 bg-emerald-50/20"><input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, filter.babNilai).formatif" class="w-full text-center border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-emerald-400 focus:outline-none"></td>
+                                <td class="p-3 bg-blue-50/20"><input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, filter.babNilai).sumatif" class="w-full text-center border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-blue-400 focus:outline-none"></td>
+                                <td class="p-3"><input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, filter.babNilai).asts" class="w-full text-center border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-gray-400 focus:outline-none"></td>
+                                <td class="p-3"><input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, filter.babNilai).asas" class="w-full text-center border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-gray-400 focus:outline-none"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ====== MODUL E: UJIAN KHUSUS KELAS 6 ====== -->
+            <section v-if="currentMenu === 'ujian-kelas-6'" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Manajemen Nilai Ujian (Khusus Kelas 6)</h3>
+                        <p class="text-xs text-gray-400 mt-0.5">Komponen khusus untuk melengkapi standarisasi kelulusan tingkat akhir.</p>
+                    </div>
+                    <button @click="triggerPrint('Ujian Kelas 6')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-print mr-2"></i>Cetak PDF</button>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
+                            <tr>
+                                <th class="p-4 w-12 text-center">No</th>
+                                <th class="p-4">Nama Siswa</th>
+                                <th class="p-4 text-center">Rombel</th>
+                                <th class="p-4 text-center bg-purple-50/50 w-48">Ujian Praktik</th>
+                                <th class="p-4 text-center bg-amber-50/50 w-48">Ujian Tertulis</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="(siswa, idx) in siswaKelas6" :key="siswa.id" class="hover:bg-gray-50/50">
+                                <td class="p-4 text-center text-gray-500">{{ idx + 1 }}</td>
+                                <td class="p-4 font-semibold text-gray-700">{{ siswa.nama }}</td>
+                                <td class="p-4 text-center"><span class="bg-gray-100 px-2 py-1 rounded text-xs font-mono font-bold">{{ siswa.kelas }}</span></td>
+                                <td class="p-3 bg-purple-50/20"><input type="number" min="0" max="100" v-model.number="getUjian6Obj(siswa.id).praktik" class="w-full text-center border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-purple-400 focus:outline-none"></td>
+                                <td class="p-3 bg-amber-50/20"><input type="number" min="0" max="100" v-model.number="getUjian6Obj(siswa.id).tertulis" class="w-full text-center border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-amber-400 focus:outline-none"></td>
+                            </tr>
+                            <tr v-if="siswaKelas6.length === 0">
+                                <td colspan="5" class="p-8 text-center text-gray-400">Tidak ditemukan siswa jenjang Kelas 6 (6A/6B/dst). Silakan tambahkan atau ubah jenjang siswa di menu Data Siswa.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ====== MODUL F: OLAHAN NILAI ====== -->
+            <section v-if="currentMenu === 'olahan-nilai'" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-4 mb-6 pb-6 border-b border-gray-100">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Sistem Pengolahan Kriteria Nilai Akhir</h3>
+                        <div class="flex items-center gap-3 mt-3">
+                            <label class="text-sm font-semibold text-gray-600">Filter Kelas Output:</label>
+                            <select v-model="filter.kelasOlahan" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none">
+                                <option value="" disabled>-- Pilih Kelas --</option>
+                                <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- EDIT BOBOT NILAI -->
+                    <div class="bg-gray-50 border border-gray-200 p-4 rounded-xl flex flex-wrap gap-4 items-center">
+                        <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block w-full mb-1"><i class="fa-solid fa-sliders mr-1.5"></i> Bobot Penilaian (%)</span>
+                        <div class="w-20">
+                            <label class="block text-[10px] uppercase text-gray-400 font-bold">Formatif</label>
+                            <input type="number" v-model.number="settings.bobot.formatif" class="w-full text-sm border border-gray-300 rounded p-1 text-center font-bold bg-white">
+                        </div>
+                        <div class="w-20">
+                            <label class="block text-[10px] uppercase text-gray-400 font-bold">Sumatif</label>
+                            <input type="number" v-model.number="settings.bobot.sumatif" class="w-full text-sm border border-gray-300 rounded p-1 text-center font-bold bg-white">
+                        </div>
+                        <div class="w-20">
+                            <label class="block text-[10px] uppercase text-gray-400 font-bold">ASTS</label>
+                            <input type="number" v-model.number="settings.bobot.asts" class="w-full text-sm border border-gray-300 rounded p-1 text-center font-bold bg-white">
+                        </div>
+                        <div class="w-20">
+                            <label class="block text-[10px] uppercase text-gray-400 font-bold">ASAS</label>
+                            <input type="number" v-model.number="settings.bobot.asas" class="w-full text-sm border border-gray-300 rounded p-1 text-center font-bold bg-white">
+                        </div>
+                        <div class="text-xs font-bold self-end pb-2" :class="totalBobot === 100 ? 'text-emerald-600' : 'text-red-500'">
+                            Total: {{ totalBobot }}%
+                        </div>
+                    </div>
+
+                    <button @click="triggerPrint('Olahan Nilai')" :disabled="totalBobot !== 100" class="disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition self-end"><i class="fa-solid fa-print mr-2"></i>Cetak PDF</button>
+                </div>
+
+                <div v-if="totalBobot !== 100" class="mb-4 p-4 bg-amber-50 text-amber-800 rounded-xl text-sm border border-amber-200 flex items-center space-x-2">
+                    <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                    <span><strong>Perhatian:</strong> Akumulasi persentase bobot komparasi saat ini adalah <strong>{{ totalBobot }}%</strong>. Pastikan total bobot bernilai genap <strong>100%</strong> agar kalkulasi nilai rata-rata akhir presisi dan tombol cetak aktif.</span>
+                </div>
+
+                <div v-if="!filter.kelasOlahan" class="p-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                    Silakan tentukan Filter Kelas Output untuk melihat komparasi kalkulasi rapor.
+                </div>
+
+                <div v-else class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
+                            <tr>
+                                <th class="p-4 w-12 text-center">No</th>
+                                <th class="p-4">Nama Siswa</th>
+                                <th class="p-4 text-center bg-emerald-50/30">Rerata Formatif</th>
+                                <th class="p-4 text-center bg-blue-50/30">Rerata Sumatif</th>
+                                <th class="p-4 text-center">Rerata ASTS</th>
+                                <th class="p-4 text-center">Rerata ASAS</th>
+                                <th v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center bg-purple-50/50">Ujian Praktik</th>
+                                <th v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center bg-amber-50/50">Ujian Tertulis</th>
+                                <th class="p-4 text-center bg-slate-800 text-white font-bold w-28">NILAI AKHIR</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="(siswa, idx) in siswaTerfilterOlahan" :key="siswa.id" class="hover:bg-gray-50/70">
+                                <td class="p-4 text-center text-gray-500">{{ idx + 1 }}</td>
+                                <td class="p-4 font-semibold text-gray-700">{{ siswa.nama }}</td>
+                                <td class="p-4 text-center font-mono text-gray-600 bg-emerald-50/10">{{ hitungRerataKomponen(siswa.id, 'formatif') }}</td>
+                                <td class="p-4 text-center font-mono text-gray-600 bg-blue-50/10">{{ hitungRerataKomponen(siswa.id, 'sumatif') }}</td>
+                                <td class="p-4 text-center font-mono text-gray-600">{{ hitungRerataKomponen(siswa.id, 'asts') }}</td>
+                                <td class="p-4 text-center font-mono text-gray-600">{{ hitungRerataKomponen(siswa.id, 'asas') }}</td>
+                                <td v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center font-mono text-gray-600 bg-purple-50/10">{{ getUjian6Obj(siswa.id).praktik || 0 }}</td>
+                                <td v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center font-mono text-gray-600 bg-amber-50/10">{{ getUjian6Obj(siswa.id).tertulis || 0 }}</td>
+                                <td class="p-4 text-center font-mono font-bold bg-slate-100 text-slate-800 text-base">
+                                    {{ hitungNilaiAkhir(siswa.id, filter.kelasOlahan) }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ====== MODUL G: JURNAL & CATATAN SISWA ====== -->
+            <section v-if="currentMenu === 'jurnal-catatan'" class="space-y-8">
+                <!-- SUB-MODUL 1: JURNAL MENGAJAR -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800">Jurnal Mengajar Guru</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Dokumentasi riwayat proses belajar mengajar harian.</p>
+                        </div>
+                        <div class="space-x-2">
+                            <button @click="openModalJurnal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Isi Jurnal</button>
+                            <button @click="triggerPrint('Jurnal Mengajar')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-print mr-2"></i>Cetak PDF</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto rounded-xl border border-gray-200">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead class="bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
+                                <tr>
+                                    <th class="p-4 w-32">Tanggal</th>
+                                    <th class="p-4 w-48">Materi / Bab</th>
+                                    <th class="p-4">Pencapaian Belajar</th>
+                                    <th class="p-4">Hambatan / Kendala</th>
+                                    <th class="p-4 text-center w-24">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="j in datastore.jurnal" :key="j.id" class="hover:bg-gray-50/50">
+                                    <td class="p-4 font-medium whitespace-nowrap text-gray-600">{{ formatTanggalIndo(j.tanggal) }}</td>
+                                    <td class="p-4 font-semibold text-gray-800">{{ j.materi }}</td>
+                                    <td class="p-4 text-gray-600">{{ j.pencapaian }}</td>
+                                    <td class="p-4 text-gray-600">{{ j.hambatan || '-' }}</td>
+                                    <td class="p-4 text-center space-x-1">
+                                        <button @click="openModalJurnal(j)" class="text-blue-600 hover:bg-blue-50 p-1.5 rounded-md"><i class="fa-solid fa-pen text-xs"></i></button>
+                                        <button @click="hapusJurnal(j.id)" class="text-red-600 hover:bg-red-50 p-1.5 rounded-md"><i class="fa-solid fa-trash text-xs"></i></button>
+                                    </td>
+                                </tr>
+                                <tr v-if="datastore.jurnal.length === 0">
+                                    <td colspan="5" class="p-6 text-center text-gray-400">Belum ada entry lembar jurnal.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- SUB-MODUL 2: CATATAN SISWA -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800">Catatan Khusus Perkembangan Siswa</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Lembar observasi perilaku, hambatan klinis, atau akselerasi akademis khusus.</p>
+                        </div>
+                        <div class="space-x-2">
+                            <button @click="openModalCatatan()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Buat Catatan</button>
+                            <button @click="triggerPrint('Catatan Siswa')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-print mr-2"></i>Cetak PDF</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto rounded-xl border border-gray-200">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead class="bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
+                                <tr>
+                                    <th class="p-4 w-52">Nama Siswa</th>
+                                    <th class="p-4 w-32 text-center">Tipe</th>
+                                    <th class="p-4">Deskripsi Observasi & Catatan</th>
+                                    <th class="p-4 text-center w-24">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="c in datastore.catatan" :key="c.id" class="hover:bg-gray-50/50">
+                                    <td class="p-4 font-semibold text-gray-700">{{ getNamaSiswaById(c.siswaId) }}</td>
+                                    <td class="p-4 text-center">
+                                        <span :class="c.tipe === 'Akademis' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'" class="px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wide">
+                                            {{ c.tipe }}
+                                        </span>
+                                    </td>
+                                    <td class="p-4 text-gray-600 italic">"{{ c.narasi }}"</td>
+                                    <td class="p-4 text-center space-x-1">
+                                        <button @click="openModalCatatan(c)" class="text-blue-600 hover:bg-blue-50 p-1.5 rounded-md"><i class="fa-solid fa-pen text-xs"></i></button>
+                                        <button @click="hapusCatatan(c.id)" class="text-red-600 hover:bg-red-50 p-1.5 rounded-md"><i class="fa-solid fa-trash text-xs"></i></button>
+                                    </td>
+                                </tr>
+                                <tr v-if="datastore.catatan.length === 0">
+                                    <td colspan="4" class="p-6 text-center text-gray-400">Belum ada riwayat catatan observasi siswa.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====== MODUL H: EXCLUSIVE SETTINGS ====== -->
+            <section v-if="currentMenu === 'pengaturan'" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Profil Identitas & Lembaga -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-school mr-2 text-slate-500"></i>Profil Guru & Instansi</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase">Nama Sekolah (KOP)</label>
+                            <input type="text" v-model="settings.namaSekolah" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-1 focus:ring-blue-400 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase">Alamat Sekolah (KOP)</label>
+                            <input type="text" v-model="settings.alamatSekolah" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-1 focus:ring-blue-400 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase">Nama Guru Mata Pelajaran</label>
+                            <input type="text" v-model="settings.namaGuru" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-1 focus:ring-blue-400 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase">NIP Guru</label>
+                            <input type="text" v-model="settings.nipGuru" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-1 focus:ring-blue-400 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase">Tahun Ajaran</label>
+                            <input type="text" v-model="settings.tahunAjaran" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-1 focus:ring-blue-400 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase">Semester</label>
+                            <select v-model="settings.semester" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-1 focus:ring-blue-400 focus:outline-none">
+                                <option value="Ganjil">Ganjil</option>
+                                <option value="Genap">Genap</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manajemen Mata Pelajaran Multi-Pilihan -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-book mr-2 text-slate-500"></i>Manajemen Mata Pelajaran (Multi)</h3>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase">Mata Pelajaran yang Anda Ampu saat ini:</label>
+                        <select v-model="settings.mapelAktif" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm font-bold bg-slate-50 text-slate-700 focus:outline-none">
+                            <option value="">-- Pilih Mata Pelajaran Aktif --</option>
+                            <option v-for="m in settings.listMapel" :value="m">{{ m }}</option>
+                        </select>
+                    </div>
+                    <div class="pt-2">
+                        <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Tambah/Edit Opsi Mata Pelajaran</label>
+                        <div class="flex gap-2 mb-3">
+                            <input type="text" v-model="formInput.newMapel" placeholder="Ketik nama mapel baru..." class="flex-1 border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                            <button @click="tambahMapelOpt()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-900 transition">Tambah</button>
+                        </div>
+                        <div class="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border border-gray-100 rounded-lg bg-gray-50/50">
+                            <span v-for="m in settings.listMapel" class="bg-white border border-gray-200 text-gray-700 px-3 py-1 rounded-lg text-xs font-medium flex items-center shadow-sm">
+                                {{ m }}
+                                <button @click="hapusMapelOpt(m)" class="text-red-500 ml-2 hover:text-red-700"><i class="fa-solid fa-xmark"></i></button>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Kustomisasi Tema Skema Warna -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-palette mr-2 text-slate-500"></i>Tema Warna Kustomisasi Sidebar</h3>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-2">Pilih Warna Dasar Area Sidebar:</label>
+                        <div class="flex items-center space-x-4">
+                            <input type="color" v-model="settings.themeColor" class="w-16 h-10 border border-gray-200 rounded cursor-pointer p-1">
+                            <div class="text-xs text-gray-500">
+                                <span class="font-mono font-bold block">{{ settings.themeColor }}</span>
+                                Warna teks menu dalam sidebar akan mengalkulasi kontras secara otomatis demi kenyamanan visibilitas membaca.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backup & Sinkronisasi Eksternal (Spreadsheet / Cloud JSON) -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-cloud-arrow-up mr-2 text-slate-500"></i>Backup Local & Google Spreadsheet (Akses Orang Tua)</h3>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase">Google Spreadsheet Webhook URL</label>
+                        <input type="url" v-model="settings.parentSpreadsheetUrl" placeholder="https://script.google.com/macros/s/.../exec" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                        <p class="text-[10px] text-gray-400 mt-1">Berfungsi mengekspor data kompilasi secara realtime agar dapat dipetakan ke Spreadsheet eksternal wali murid.</p>
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button @click="downloadBackupJSON()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold p-2.5 rounded-xl transition"><i class="fa-solid fa-download mr-2"></i>Download JSON</button>
+                        <label class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold p-2.5 rounded-xl transition text-center cursor-pointer">
+                            <i class="fa-solid fa-upload mr-2"></i>Restore JSON
+                            <input type="file" @change="uploadRestoreJSON" class="hidden" accept=".json">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Konektivitas Awan Multi-Device (Firebase API Credentials Hub) -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 lg:col-span-2">
+                    <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-key mr-2 text-slate-500"></i>Konfigurasi Cloud Gateway Hub (Kredensial SDK Firebase)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div v-for="(val, key) in settings.firebase" :key="key">
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase font-mono">{{ key.replace(/([A-Z])/g, ' $1') }}</label>
+                            <input type="text" v-model="settings.firebase[key]" placeholder="Required/Optional" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-xs font-mono focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- ====== DYNAMIC MODAL LAYER (VUE INTERACTION CONTROL) ====== -->
+    <!-- Modal Siswa -->
+    <div v-if="modal.siswa.show" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-150">
+            <h4 class="text-base font-bold text-gray-900 mb-4">{{ modal.siswa.isEdit ? 'Ubah Profil Siswa' : 'Tambah Siswa Baru' }}</h4>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Nomor Induk Siswa (NIS/NISN)</label>
+                    <input type="text" v-model="modal.siswa.data.nis" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Nama Lengkap</label>
+                    <input type="text" v-model="modal.siswa.data.nama" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Pilihan Jenjang Kelas / Rombel</label>
+                    <select v-model="modal.siswa.data.kelas" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                        <option value="" disabled>-- Pilih Rombel --</option>
+                        <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2 mt-6">
+                <button @click="modal.siswa.show = false" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-xs font-bold">Batal</button>
+                <button @click="simpanSiswa()" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold">Simpan Data</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Bab / TP -->
+    <div v-if="modal.bab.show" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h4 class="text-base font-bold text-gray-900 mb-4">{{ modal.bab.isEdit ? 'Ubah Bab' : 'Tambah Transkrip Bab' }}</h4>
+            <div class="space-y-3">
+                <div class="w-24">
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Nomor Bab</label>
+                    <input type="number" v-model.number="modal.bab.data.nomor" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Judul / Materi Pokok Bab</label>
+                    <input type="text" v-model="modal.bab.data.nama" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Capaian Deskripsi Tujuan Pembelajaran (TP)</label>
+                    <textarea rows="3" v-model="modal.bab.data.tp" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none"></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2 mt-6">
+                <button @click="modal.bab.show = false" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-xs font-bold">Batal</button>
+                <button @click="simpanBab()" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold">Commit Data</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Jurnal -->
+    <div v-if="modal.jurnal.show" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h4 class="text-base font-bold text-gray-900 mb-4">Pengisian Jurnal Harian</h4>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Tanggal</label>
+                    <input type="date" v-model="modal.jurnal.data.tanggal" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Materi Pokok / Bahasan Bab</label>
+                    <input type="text" v-model="modal.jurnal.data.materi" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Pencapaian / Ketercapaian Kelas</label>
+                    <textarea rows="2" v-model="modal.jurnal.data.pencapaian" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Hambatan / Catatan Solusi (Opsional)</label>
+                    <textarea rows="2" v-model="modal.jurnal.data.hambatan" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none"></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2 mt-6">
+                <button @click="modal.jurnal.show = false" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-xs font-bold">Batal</button>
+                <button @click="simpanJurnal()" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold">Simpan Jurnal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Catatan Siswa -->
+    <div v-if="modal.catatan.show" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h4 class="text-base font-bold text-gray-900 mb-4">Catatan Observasi Perilaku & Akademik</h4>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Pilih Siswa</label>
+                    <select v-model="modal.catatan.data.siswaId" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                        <option value="" disabled>-- Pilih Siswa --</option>
+                        <option v-for="s in datastore.siswa" :value="s.id">{{ s.nama }} ({{ s.kelas }})</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Klasifikasi Kategori</label>
+                    <select v-model="modal.catatan.data.tipe" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none">
+                        <option value="Akademis">Akademis (Nilai / Hambatan Belajar)</option>
+                        <option value="Perilaku">Perilaku (Sikap / Karakter / Profil Pancasila)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase">Narasi Rekam Jejak Deskriptif</label>
+                    <textarea rows="4" v-model="modal.catatan.data.narasi" placeholder="Tulis rincian fakta lapangan..." class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none"></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2 mt-6">
+                <button @click="modal.catatan.show = false" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-xs font-bold">Batal</button>
+                <button @click="simpanCatatan()" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold">Simpan Catatan</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== AREA SISTEM CETAK PDF (HIDDEN SECARA DEFAULT, MUNCUL PADA PREVIEW PRINT) ==================== -->
+    <div id="print-area" class="hidden p-10 bg-white text-black text-sm">
+        <!-- KOP DOKUMEN RESMI DINAMIS -->
+        <div class="text-center border-b-4 border-double border-black pb-4 mb-6">
+            <h2 class="text-2xl font-black uppercase tracking-wide">{{ settings.namaSekolah }}</h2>
+            <p class="text-xs italic">{{ settings.alamatSekolah }}</p>
+            <p class="text-xs font-bold mt-1 uppercase">ADMINISTRASI MATRIKS PENILAIAN & EVALUASI PEMBELAJARAN</p>
+        </div>
+
+        <!-- META SUB-KETERANGAN DOKUMEN -->
+        <div class="grid grid-cols-2 gap-2 text-xs mb-6 bg-slate-50 p-3 rounded border border-gray-300">
+            <div>
+                <div><strong>Mata Pelajaran:</strong> {{ settings.mapelAktif || '-' }}</div>
+                <div><strong>Tahun Ajaran:</strong> {{ settings.tahunAjaran }}</div>
+                <div><strong>Semester:</strong> {{ settings.semester }}</div>
+            </div>
+            <div class="text-right">
+                <div><strong>Guru Pengampu:</strong> {{ settings.namaGuru }}</div>
+                <div><strong>NIP:</strong> {{ settings.nipGuru || '-' }}</div>
+                <div><strong>Modul Dokumen:</strong> <span class="uppercase font-bold">{{ printMeta.judul }}</span></div>
+            </div>
+        </div>
+
+        <h3 class="text-center font-bold text-base uppercase underline tracking-wider mb-4">{{ printMeta.judul }}</h3>
+
+        <!-- CONTAINER TEMPLATE INJEKSI TABEL DATA UNTUK PRINT -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse border border-black text-xs">
+                <thead>
+                    <tr class="bg-gray-200 text-black border-b border-black">
+                        <th v-for="h in printMeta.headers" class="border border-black p-2 text-center font-bold uppercase">{{ h }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(row, idx) in printMeta.rows" class="border-b border-black">
+                        <td class="border border-black p-2 text-center">{{ idx + 1 }}</td>
+                        <td v-for="key in printMeta.keys" class="border border-black p-2" :class="{'text-center': key==='kelas'||key==='status'||key==='tipe'||key==='nilai'}">
+                            {{ row[key] }}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- BLOK SUB-TANDA TANGAN DINAMIS -->
+        <div class="mt-12 grid grid-cols-2 text-center text-xs">
+            <div>
+                <p>Mengetahui,</p>
+                <p class="font-semibold">Kepala Sekolah</p>
+                <div class="h-20"></div>
+                <p class="font-bold underline text-sm">......................................................</p>
+                <p>NIP. ..........................................</p>
+            </div>
+            <div>
+                <p>Salatiga, {{ formatTanggalIndo(new Date().toISOString().split('T')[0]) }}</p>
+                <p class="font-semibold">Guru Mata Pelajaran</p>
+                <div class="h-20"></div>
+                <p class="font-bold underline text-sm">{{ settings.namaGuru }}</p>
+                <p>NIP. {{ settings.nipGuru || '-' }}</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- APPLICATION CORE ARCHITECTURE (VUE ENGINE SCRIPT) -->
+<script>
+    const { createApp, ref, computed, watch, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            // --- DATA UTAMA APLIKASI (LOCALSTORAGE SYNC) ---
+            const datastore = ref({
+                siswa: [],
+                presensi: {}, // Struktur: { "YYYY-MM-DD": { "siswaId": "H/S/I/A" } }
+                bab: [],
+                nilai: [],    // Struktur: { siswaId, babId, formatif, sumatif, asts, asas }
+                ujian6: [],   // Struktur: { siswaId, praktik, tertulis }
+                jurnal: [],
+                catatan: []
+            });
+
+            // --- MENU SKELETON CONFIGURATION ---
+            const currentMenu = ref('data-siswa');
+            const menus = [
+                { id: 'data-siswa', name: 'Data Siswa', icon: 'fa-solid fa-users' },
+                { id: 'presensi', name: 'Presensi Kehadiran', icon: 'fa-solid fa-calendar-check' },
+                { id: 'bab-tp', name: 'Bab & Tujuan Belajar', icon: 'fa-solid fa-book-bookmark' },
+                { id: 'input-nilai', name: 'Input Lembar Nilai', icon: 'fa-solid fa-square-poll-horizontal' },
+                { id: 'ujian-kelas-6', name: 'Ujian Kelas 6', icon: 'fa-solid fa-award' },
+                { id: 'olahan-nilai', name: 'Olahan Nilai Akhir', icon: 'fa-solid fa-calculator' },
+                { id: 'jurnal-catatan', name: 'Jurnal & Catatan', icon: 'fa-solid fa-clipboard-list' },
+                { id: 'pengaturan', name: 'Pengaturan Sistem', icon: 'fa-solid fa-gears' }
+            ];
+
+            // --- CONFIG KONFIGURASI GLOBAL ---
+            const settings = ref({
+                namaSekolah: 'SD Negeri Nusantara',
+                alamatSekolah: 'Jl. Pemuda No. 45, Kota Salatiga, Jawa Tengah',
+                namaGuru: 'Budi Setiawan, S.Pd.',
+                nipGuru: '19880312 201504 1 002',
+                tahunAjaran: '2025/2026',
+                semester: 'Ganjil',
+                mapelAktif: 'Matematika',
+                listMapel: ['Matematika', 'Bahasa Indonesia', 'IPAS', 'Pendidikan Pancasila', 'Seni Budaya'],
+                themeColor: '#fce7f3', // Default Light Pink Muda Hex Code
+                parentSpreadsheetUrl: '',
+                bobot: { formatif: 30, sumatif: 40, asts: 15, asas: 15 },
+                firebase: { apiKey: '', authDomain: '', databaseURL: '', projectId: '', storageBucket: '', messagingSenderId: '', appId: '', measurementId: '' }
+            });
+
+            // --- FORM INPUT & FILTERING TRANSIENT STATE ---
+            const filter = ref({
+                tanggalPresensi: new Date().toISOString().split('T')[0],
+                kelasPresensi: 'Semua',
+                kelasNilai: '',
+                babNilai: '',
+                kelasOlahan: ''
+            });
+
+            const formInput = ref({ newMapel: '' });
+
+            // --- MODAL WINDOW CONTROL ---
+            const modal = ref({
+                siswa: { show: false, isEdit: false, data: { id: null, nis: '', nama: '', kelas: '' } },
+                bab: { show: false, isEdit: false, data: { id: null, nomor: null, nama: '', tp: '' } },
+                jurnal: { show: false, isEdit: false, data: { id: null, tanggal: '', materi: '', pencapaian: '', hambatan: '' } },
+                catatan: { show: false, isEdit: false, data: { id: null, siswaId: '', tipe: 'Akademis', narasi: '' } }
+            });
+
+            // --- PRINT PRINTING TRANSFORMATION METADATA ---
+            const printMeta = ref({ judul: '', headers: [], keys: [], rows: [] });
+
+            // --- GENERATE LIST ROMBEL KELAS (1A - 6B) ---
+            const listRombel = computed(() => {
+                let res = [];
+                for(let i=1; i<=6; i++) {
+                    res.push(`${i}A`);
+                    res.push(`${i}B`);
+                }
+                return res;
+            });
+
+            // --- AUTO CONTRAST CALCULATOR SIDEBAR TEXT ---
+            const sidebarTextColor = computed(() => {
+                const hex = settings.value.themeColor.replace('#', '');
+                const r = parseInt(hex.substr(0, 2), 16);
+                const g = parseInt(hex.substr(2, 2), 16);
+                const b = parseInt(hex.substr(4, 2), 16);
+                const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+                return (yiq >= 140) ? 'text-gray-800' : 'text-white';
+            });
+
+            const totalBobot = computed(() => {
+                return (settings.value.bobot.formatif || 0) + (settings.value.bobot.sumatif || 0) + (settings.value.bobot.asts || 0) + (settings.value.bobot.asas || 0);
+            });
+
+            // --- PERSISTENCE DISK CONTROL ENGINES ---
+            const saveToLocal = () => {
+                localStorage.setItem('eunoia_datastore', JSON.stringify(datastore.value));
+                localStorage.setItem('eunoia_settings', JSON.stringify(settings.value));
+            };
+
+            onMounted(() => {
+                const localStore = localStorage.getItem('eunoia_datastore');
+                const localSet = localStorage.getItem('eunoia_settings');
+                if(localStore) datastore.value = JSON.parse(localStore);
+                if(localSet) settings.value = JSON.parse(localSet);
+                
+                // Memicu trigger reactive binding watch opsional
+                if (datastore.value.bab.length > 0) filter.value.babNilai = datastore.value.bab[0].id;
+            });
+
+            watch(datastore, () => saveToLocal(), { deep: true });
+            watch(settings, () => saveToLocal(), { deep: true });
+
+            // --- LOGIKA MODUL A: DATA SISWA ---
+            const openModalSiswa = (siswa = null) => {
+                if(siswa) {
+                    modal.value.siswa.isEdit = true;
+                    modal.value.siswa.data = { ...siswa };
+                } else {
+                    modal.value.siswa.isEdit = false;
+                    modal.value.siswa.data = { id: Date.now(), nis: '', nama: '', kelas: '' };
+                }
+                modal.value.siswa.show = true;
+            };
+
+            const simpanSiswa = () => {
+                const d = modal.value.siswa.data;
+                if(!d.nis || !d.nama || !d.kelas) return alert('Mohon lengkapi semua baris input!');
+                if(modal.value.siswa.isEdit) {
+                    const i = datastore.value.siswa.findIndex(s => s.id === d.id);
+                    if(i !== -1) datastore.value.siswa[i] = d;
+                } else {
+                    datastore.value.siswa.push(d);
+                }
+                modal.value.siswa.show = false;
+            };
+
+            const hapusSiswa = (id) => {
+                if(confirm('Apakah Anda yakin ingin menghapus data siswa ini secara permanen?')) {
+                    datastore.value.siswa = datastore.value.siswa.filter(s => s.id !== id);
+                }
+            };
+
+            // --- LOGIKA MODUL B: PRESENSI ---
+            const siswaTerfilterPresensi = computed(() => {
+                if(filter.value.kelasPresensi === 'Semua') return datastore.value.siswa;
+                return datastore.value.siswa.filter(s => s.kelas === filter.value.kelasPresensi);
+            });
+
+            const setPresensi = (siswaId, status) => {
+                const tgl = filter.value.tanggalPresensi;
+                if(!datastore.value.presensi[tgl]) datastore.value.presensi[tgl] = {};
+                datastore.value.presensi[tgl][siswaId] = status;
+            };
+
+            const getPresensiClass = (siswaId, status) => {
+                const tgl = filter.value.tanggalPresensi;
+                const current = datastore.value.presensi[tgl]?.[siswaId] || 'H'; // Default hadir
+                if (current !== status) return 'bg-white text-gray-400 hover:bg-gray-100';
+                
+                switch(status) {
+                    case 'H': return 'bg-emerald-600 text-white';
+                    case 'S': return 'bg-blue-500 text-white';
+                    case 'I': return 'bg-amber-500 text-white';
+                    case 'A': return 'bg-red-600 text-white';
+                }
+            };
+
+            const exportPresensiExcel = () => {
+                let wb = XLSX.utils.book_new();
+                let data = datastore.value.siswa.map((s, i) => {
+                    let status = datastore.value.presensi[filter.value.tanggalPresensi]?.[s.id] || 'H';
+                    return { 'No': i+1, 'NIS': s.nis, 'Nama': s.nama, 'Kelas': s.kelas, 'Status Kehadiran': status };
+                });
+                let ws = XLSX.utils.json_to_sheet(data);
+                XLSX.utils.book_append_sheet(wb, ws, "Rekap Presensi");
+                XLSX.writeFile(wb, `Rekap_Presensi_${filter.value.tanggalPresensi}.xlsx`);
+            };
+
+            // --- LOGIKA MODUL C: MANAJEMEN BAB & TP ---
+            const openModalBab = (bab = null) => {
+                if(bab) {
+                    modal.value.bab.isEdit = true;
+                    modal.value.bab.data = { ...bab };
+                } else {
+                    modal.value.bab.isEdit = false;
+                    modal.value.bab.data = { id: Date.now(), nomor: datastore.value.bab.length + 1, nama: '', tp: '' };
+                }
+                modal.value.bab.show = true;
+            };
+
+            const simpanBab = () => {
+                const d = modal.value.bab.data;
+                if(!d.nomor || !d.nama || !d.tp) return alert('Mohon lengkapi semua aspek deskripsi!');
+                if(modal.value.bab.isEdit) {
+                    const i = datastore.value.bab.findIndex(b => b.id === d.id);
+                    if(i !== -1) datastore.value.bab[i] = d;
+                } else {
+                    datastore.value.bab.push(d);
+                }
+                modal.value.bab.show = false;
+            };
+
+            const hapusBab = (id) => {
+                if(confirm('Hapus Bab ini akan berdampak pada hilangnya tautan data nilai terikat. Lanjutkan?')) {
+                    datastore.value.bab = datastore.value.bab.filter(b => b.id !== id);
+                }
+            };
+
+            // --- LOGIKA MODUL D: INPUT NILAI & STRUKTUR ---
+            const siswaTerfilterNilai = computed(() => {
+                if(!filter.value.kelasNilai) return [];
+                return datastore.value.siswa.filter(s => s.kelas === filter.value.kelasNilai);
+            });
+
+            const getNilaiObj = (siswaId, babId) => {
+                let item = datastore.value.nilai.find(n => n.siswaId === siswaId && n.babId === babId);
+                if(!item) {
+                    item = { siswaId, babId, formatif: 0, sumatif: 0, asts: 0, asas: 0 };
+                    datastore.value.nilai.push(item);
+                }
+                return item;
+            };
+
+            const exportNilaiExcel = () => {
+                if(!filter.value.kelasNilai || !filter.value.babNilai) return alert('Tentukan parameter filter sebelum unduh data.');
+                let wb = XLSX.utils.book_new();
+                let data = siswaTerfilterNilai.value.map((s, i) => {
+                    let obj = getNilaiObj(s.id, filter.value.babNilai);
+                    return { 'No': i+1, 'Nama': s.nama, 'Kelas': s.kelas, 'Formatif': obj.formatif, 'Sumatif': obj.sumatif, 'ASTS': obj.asts, 'ASAS': obj.asas };
+                });
+                let ws = XLSX.utils.json_to_sheet(data);
+                XLSX.utils.book_append_sheet(wb, ws, "Nilai");
+                XLSX.writeFile(wb, `Rekap_Nilai_Kelas_${filter.value.kelasNilai}_BabID_${filter.value.babNilai}.xlsx`);
+            };
+
+            // --- LOGIKA MODUL E: KHUSUS KELAS 6 ---
+            const isKelas6String = (str) => {
+                return str && str.startsWith('6');
+            };
+
+            const siswaKelas6 = computed(() => {
+                return datastore.value.siswa.filter(s => isKelas6String(s.kelas));
+            });
+
+            const getUjian6Obj = (siswaId) => {
+                let item = datastore.value.ujian6.find(u => u.siswaId === siswaId);
+                if(!item) {
+                    item = { siswaId, praktik: 0, tertulis: 0 };
+                    datastore.value.ujian6.push(item);
+                }
+                return item;
+            };
+
+            // --- LOGIKA MODUL F: OLAHAN NILAI AKHIR ---
+            const siswaTerfilterOlahan = computed(() => {
+                if(!filter.value.kelasOlahan) return [];
+                return datastore.value.siswa.filter(s => s.kelas === filter.value.kelasOlahan);
+            });
+
+            const hitungRerataKomponen = (siswaId, komponen) => {
+                let records = datastore.value.nilai.filter(n => n.siswaId === siswaId);
+                if(records.length === 0) return 0;
+                let total = records.reduce((acc, curr) => acc + (curr[komponen] || 0), 0);
+                return Math.round(total / records.length);
+            };
+
+            const hitungNilaiAkhir = (siswaId, kelas) => {
+                let fRata = hitungRerataKomponen(siswaId, 'formatif');
+                let sRata = hitungRerataKomponen(siswaId, 'sumatif');
+                let astsRata = hitungRerataKomponen(siswaId, 'asts');
+                let asasRata = hitungRerataKomponen(siswaId, 'asas');
+
+                let b = settings.value.bobot;
+                let nilaiAkademis = ((fRata * b.formatif) + (sRata * b.sumatif) + (astsRata * b.asts) + (asasRata * b.asas)) / 100;
+
+                // Apabila kelas 6, integrasikan bobot 40% Ujian Akhir (Praktik + Tertulis) + 60% Nilai Akademis Rapor
+                if(isKelas6String(kelas)) {
+                    let uj = getUjian6Obj(siswaId);
+                    let rerataUjian = ((uj.praktik || 0) + (uj.tertulis || 0)) / 2;
+                    return Math.round((nilaiAkademis * 0.6) + (rerataUjian * 0.4));
+                }
+
+                return Math.round(nilaiAkademis);
+            };
+
+            // --- LOGIKA MODUL G: JURNAL & CATATAN ---
+            const openModalJurnal = (jurnal = null) => {
+                if(jurnal) {
+                    modal.value.jurnal.isEdit = true;
+                    modal.value.jurnal.data = { ...jurnal };
+                } else {
+                    modal.value.jurnal.isEdit = false;
+                    modal.value.jurnal.data = { id: Date.now(), tanggal: new Date().toISOString().split('T')[0], materi: '', pencapaian: '', hambatan: '' };
+                }
+                modal.value.jurnal.show = true;
+            };
+
+            const simpanJurnal = () => {
+                const d = modal.value.jurnal.data;
+                if(!d.tanggal || !d.materi || !d.pencapaian) return alert('Mohon isi field esensial!');
+                if(modal.value.jurnal.isEdit) {
+                    const i = datastore.value.jurnal.findIndex(j => j.id === d.id);
+                    if(i !== -1) datastore.value.jurnal[i] = d;
+                } else {
+                    datastore.value.jurnal.push(d);
+                }
+                modal.value.jurnal.show = false;
+            };
+
+            const hapusJurnal = (id) => {
+                if(confirm('Hapus log berkas jurnal?')) datastore.value.jurnal = datastore.value.jurnal.filter(j => j.id !== id);
+            };
+
+            const openModalCatatan = (catatan = null) => {
+                if(catatan) {
+                    modal.value.catatan.isEdit = true;
+                    modal.value.catatan.data = { ...catatan };
+                } else {
+                    modal.value.catatan.isEdit = false;
+                    modal.value.catatan.data = { id: Date.now(), siswaId: '', tipe: 'Akademis', narasi: '' };
+                }
+                modal.value.catatan.show = true;
+            };
+
+            const simpanCatatan = () => {
+                const d = modal.value.catatan.data;
+                if(!d.siswaId || !d.narasi) return alert('Mohon tentukan siswa dan teks narasi!');
+                if(modal.value.catatan.isEdit) {
+                    const i = datastore.value.catatan.findIndex(c => c.id === d.id);
+                    if(i !== -1) datastore.value.catatan[i] = d;
+                } else {
+                    datastore.value.catatan.push(d);
+                }
+                modal.value.catatan.show = false;
+            };
+
+            const hapusCatatan = (id) => {
+                if(confirm('Hapus lampiran catatan siswa ini?')) datastore.value.catatan = datastore.value.catatan.filter(c => c.id !== id);
+            };
+
+            const getNamaSiswaById = (id) => {
+                return datastore.value.siswa.find(s => s.id === id)?.nama || 'Siswa Terhapus';
+            };
+
+            // --- LOGIKA MODUL H: MANAGEMENT MENU CONFIG ---
+            const tambahMapelOpt = () => {
+                let m = formInput.value.newMapel.trim();
+                if(m && !settings.value.listMapel.includes(m)) {
+                    settings.value.listMapel.push(m);
+                    formInput.value.newMapel = '';
+                }
+            };
+
+            const hapusMapelOpt = (m) => {
+                settings.value.listMapel = settings.value.listMapel.filter(item => item !== m);
+                if (settings.value.mapelAktif === m) settings.value.mapelAktif = '';
+            };
+
+            const downloadBackupJSON = () => {
+                let packageData = { datastore: datastore.value, settings: settings.value };
+                let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(packageData));
+                let dlAnchor = document.createElement('a');
+                dlAnchor.setAttribute("href", dataStr);
+                dlAnchor.setAttribute("download", `EUNOIA_BACKUP_${new Date().toISOString().split('T')[0]}.json`);
+                dlAnchor.click();
+            };
+
+            const uploadRestoreJSON = (event) => {
+                let file = event.target.files[0];
+                if (!file) return;
+                let reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        let parsed = JSON.parse(e.target.result);
+                        if(parsed.datastore && parsed.settings) {
+                            datastore.value = parsed.datastore;
+                            settings.value = parsed.settings;
+                            alert('Sistem restorasi database Eunoia sukses disinkronkan!');
+                        } else {
+                            alert('Format file JSON tidak sesuai standar spesifikasi Eunoia.');
+                        }
+                    } catch (err) {
+                        alert('Gagal mengeksekusi file. Pastikan ekstensi valid JSON.');
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            // --- ENGINE CORE DOKUMEN CETAK PDF / PRINT PREVIEW ---
+            const triggerPrint = (modulName) => {
+                printMeta.value.judul = modulName;
+                let rows = [];
+                let headers = [];
+                let keys = [];
+
+                switch (modulName) {
+                    case 'Data Siswa':
+                        headers = ['No', 'NIS/NISN', 'Nama Lengkap', 'Kelas'];
+                        keys = ['nis', 'nama', 'kelas'];
+                        rows = [...datastore.value.siswa];
+                        break;
+                    case 'Presensi':
+                        headers = ['No', 'Nama Siswa', 'Kelas', 'Status Kehadiran'];
+                        keys = ['nama', 'kelas', 'status'];
+                        rows = siswaTerfilterPresensi.value.map(s => ({
+                            nama: s.nama, kelas: s.kelas, status: datastore.value.presensi[filter.value.tanggalPresensi]?.[s.id] || 'H'
+                        }));
+                        break;
+                    case 'Input Nilai':
+                        headers = ['No', 'Nama Siswa', 'Formatif', 'Sumatif', 'ASTS', 'ASAS'];
+                        keys = ['nama', 'formatif', 'sumatif', 'asts', 'asas'];
+                        rows = siswaTerfilterNilai.value.map(s => {
+                            let o = getNilaiObj(s.id, filter.value.babNilai);
+                            return { nama: s.nama, formatif: o.formatif, sumatif: o.sumatif, asts: o.asts, asas: o.asas };
+                        });
+                        break;
+                    case 'Ujian Kelas 6':
+                        headers = ['No', 'Nama Siswa', 'Kelas Rombel', 'Ujian Praktik', 'Ujian Tertulis'];
+                        keys = ['nama', 'kelas', 'praktik', 'tertulis'];
+                        rows = siswaKelas6.value.map(s => {
+                            let o = getUjian6Obj(s.id);
+                            return { nama: s.nama, kelas: s.kelas, praktik: o.praktik, tertulis: o.tertulis };
+                        });
+                        break;
+                    case 'Olahan Nilai':
+                        let is6 = isKelas6String(filter.value.kelasOlahan);
+                        headers = is6 ? ['No', 'Nama Siswa', 'Form', 'Sum', 'ASTS', 'ASAS', 'Prak', 'Tertulis', 'N. AKHIR'] 
+                                      : ['No', 'Nama Siswa', 'Form', 'Sum', 'ASTS', 'ASAS', 'N. AKHIR'];
+                        keys = is6 ? ['nama', 'f', 's', 'asts', 'asas', 'p', 't', 'na']
+                                   : ['nama', 'f', 's', 'asts', 'asas', 'na'];
+                        rows = siswaTerfilterOlahan.value.map(s => ({
+                            nama: s.nama,
+                            f: hitungRerataKomponen(s.id, 'formatif'),
+                            s: hitungRerataKomponen(s.id, 'sumatif'),
+                            asts: hitungRerataKomponen(s.id, 'asts'),
+                            asas: hitungRerataKomponen(s.id, 'asas'),
+                            p: getUjian6Obj(s.id).praktik,
+                            t: getUjian6Obj(s.id).tertulis,
+                            na: hitungNilaiAkhir(s.id, filter.value.kelasOlahan)
+                        }));
+                        break;
+                    case 'Jurnal Mengajar':
+                        headers = ['No', 'Tanggal', 'Materi Bahasan', 'Ketercapaian'];
+                        keys = ['tanggal', 'materi', 'pencapaian'];
+                        rows = [...datastore.value.jurnal];
+                        break;
+                    case 'Catatan Siswa':
+                        headers = ['No', 'Nama Siswa', 'Kategori Tipe', 'Uraian Catatan'];
+                        keys = ['nama', 'tipe', 'narasi'];
+                        rows = datastore.value.catatan.map(c => ({
+                            nama: getNamaSiswaById(c.siswaId), tipe: c.tipe, narasi: c.narasi
+                        }));
+                        break;
+                }
+
+                printMeta.value.headers = headers;
+                printMeta.value.keys = keys;
+                printMeta.value.rows = rows;
+
+                // Delay execution window print microtask rendering DOM Vue selesai
+                setTimeout(() => { window.print(); }, 400);
+            };
+
+            // --- UTILITY FORMAT TANGGAL INDONESIA ---
+            const formatTanggalIndo = (tglStr) => {
+                if(!tglStr) return '-';
+                const opsi = { year: 'numeric', month: 'long', day: 'numeric' };
+                return new Date(tglStr).toLocaleDateString('id-ID', opsi);
+            };
+
+            return {
+                currentMenu, menus, settings, filter, formInput, modal, datastore, listRombel, totalBobot, sidebarTextColor,
+                openModalSiswa, simpanSiswa, hapusSiswa, siswaTerfilterPresensi, setPresensi, getPresensiClass, exportPresensiExcel,
+                openModalBab, simpanBab, hapusBab, siswaTerfilterNilai, getNilaiObj, exportNilaiExcel, isKelas6String, siswaKelas6,
+                getUjian6Obj, siswaTerfilterOlahan, hitungRerataKomponen, hitungNilaiAkhir, openModalJurnal, simpanJurnal,
+                hapusJurnal, openModalCatatan, simpanCatatan, hapusCatatan, getNamaSiswaById, tambahMapelOpt, hapusMapelOpt,
+                downloadBackupJSON, uploadRestoreJSON, triggerPrint, printMeta, formatTanggalIndo
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
