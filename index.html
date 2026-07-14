@@ -52,14 +52,28 @@
             <!-- Sisi Form Login (Kanan) -->
             <div class="md:w-7/12 p-10 py-16 flex flex-col justify-center bg-white">
                 <h2 class="text-2xl font-bold text-gray-800 mb-2">Selamat Datang Kembali</h2>
-                <p class="text-sm text-gray-500 mb-8">Silakan masukkan kredensial Anda untuk membuka kunci aplikasi.</p>
+                <p class="text-sm text-gray-500 mb-6">Silakan masukkan kredensial Anda untuk membuka kunci aplikasi.</p>
                 
+                <div class="bg-blue-50 text-blue-700 p-3.5 rounded-xl text-xs font-medium mb-6 border border-blue-100 leading-relaxed shadow-sm">
+                    <i class="fa-solid fa-circle-info mr-1.5 text-blue-500"></i>
+                    <strong>Kode Lisensi :</strong> (Diberikan oleh Penjual Aplikasi)<br>
+                    <strong>Username :</strong> eunoia <span class="mx-1">|</span> <strong>Pin :</strong> 12345<br>
+                    <span class="mt-1 block opacity-90">Setiap Kode Lisensi memiliki ruang database (workspace) yang dipisah ketat secara lokal dan dijamin tidak tertumpuk. Setelah Anda login, silakan ubah username dan sandi pada menu Pengaturan.</span>
+                </div>
+
                 <!-- Peringatan Error -->
                 <div v-if="loginForm.error" class="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold mb-5 flex items-center border border-red-100">
                     <i class="fa-solid fa-triangle-exclamation mr-2 text-base"></i> {{ loginForm.error }}
                 </div>
 
                 <form @submit.prevent="handleLogin" class="space-y-5">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Kode Lisensi / ID Instansi</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-key absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" v-model="loginForm.license" placeholder="Masukkan kode lisensi unik Anda" required class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm font-mono uppercase">
+                        </div>
+                    </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Username / ID Pengguna</label>
                         <div class="relative">
@@ -802,6 +816,22 @@
                         </div>
                     </div>
 
+                    <!-- Kredensial Keamanan Akses -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                        <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-lock mr-2 text-slate-500"></i>Kredensial Keamanan Akses</h3>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase">Username Aplikasi</label>
+                                <input type="text" v-model="settings.username" placeholder="Masukkan username baru" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase">PIN / Password Utama</label>
+                                <input type="text" v-model="settings.password" placeholder="Masukkan PIN / Password baru" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
+                            </div>
+                            <p class="text-[10px] text-gray-400 leading-tight">Data login ini disimpan secara lokal di perangkat Anda. Karena tidak menggunakan database eksternal, mohon ingat baik-baik username dan PIN Anda agar tidak terkunci.</p>
+                        </div>
+                    </div>
+
                     <!-- Konektivitas Awan Multi-Device (Firebase API Credentials Hub) -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 lg:col-span-2">
                         <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-key mr-2 text-slate-500"></i>Konfigurasi Cloud Gateway Hub (Kredensial SDK Firebase)</h3>
@@ -1041,6 +1071,8 @@
                 listMapel: ['Bahasa Inggris', 'Matematika', 'Bahasa Indonesia', 'IPAS', 'Pendidikan Pancasila'],
                 themeColor: '#b91c1c', 
                 parentSpreadsheetUrl: '',
+                username: 'eunoia',
+                password: '12345',
                 bobot: { formatif: 30, sumatif: 40, asts: 15, asas: 15 },
                 firebase: { apiKey: '', authDomain: '', databaseURL: '', projectId: '', storageBucket: '', messagingSenderId: '', appId: '', measurementId: '' }
             });
@@ -1068,18 +1100,59 @@
                 kelasRekap: '1A'
             });
 
-            // --- SISTEM AUTENTIKASI LOKAL (LOGIN / LOGOUT) ---
-            const isLoggedIn = ref(localStorage.getItem('eunoia_session') === 'active');
-            const loginForm = ref({ username: '', password: '', error: '' });
+            // --- SISTEM AUTENTIKASI LOKAL & MULTI-TENANT (PISAH LISENSI) ---
+            const currentLicense = ref(localStorage.getItem('eunoia_active_license') || '');
+            const isLoggedIn = ref(localStorage.getItem('eunoia_session') === 'active' && currentLicense.value !== '');
+            const loginForm = ref({ license: localStorage.getItem('eunoia_last_license') || '', username: '', password: '', error: '' });
+
+            const getDefaultSettings = () => ({
+                namaSekolah: 'SDN 1 Menteng',
+                alamatSekolah: 'Jl. Menteng Raya No. 1, Jakarta',
+                namaGuru: 'Ahmad Subarjo, S.Pd.',
+                nipGuru: '198412032009041002',
+                tahunAjaran: '2025/2026',
+                semester: 'Ganjil',
+                mapelAktif: 'Bahasa Inggris',
+                listMapel: ['Bahasa Inggris', 'Matematika', 'Bahasa Indonesia', 'IPAS', 'Pendidikan Pancasila'],
+                themeColor: '#b91c1c', 
+                parentSpreadsheetUrl: '',
+                username: 'eunoia',
+                password: '12345',
+                bobot: { formatif: 30, sumatif: 40, asts: 15, asas: 15 },
+                firebase: { apiKey: '', authDomain: '', databaseURL: '', projectId: '', storageBucket: '', messagingSenderId: '', appId: '', measurementId: '' }
+            });
 
             const handleLogin = () => {
-                if (loginForm.value.password === '123456') {
+                const lic = loginForm.value.license.trim().toUpperCase();
+                if(!lic) {
+                    loginForm.value.error = 'Kode Lisensi tidak boleh kosong!';
+                    return;
+                }
+
+                // Melakukan validasi kredensial pada sandbox/brankas lisensi spesifik
+                let targetSettings = localStorage.getItem(`eunoia_settings_${lic}`);
+                let validUser = 'eunoia';
+                let validPass = '12345';
+                
+                if(targetSettings) {
+                    const parsedSet = JSON.parse(targetSettings);
+                    validUser = parsedSet.username || 'eunoia';
+                    validPass = parsedSet.password || '12345';
+                }
+                
+                if (loginForm.value.username === validUser && loginForm.value.password === validPass) {
+                    currentLicense.value = lic;
                     isLoggedIn.value = true;
                     localStorage.setItem('eunoia_session', 'active');
+                    localStorage.setItem('eunoia_active_license', lic);
+                    localStorage.setItem('eunoia_last_license', lic); // Mengingat lisensi terakhir di form login
                     loginForm.value.error = '';
                     loginForm.value.password = ''; 
+                    loginForm.value.username = '';
+                    
+                    loadDataForLicense(lic);
                 } else {
-                    loginForm.value.error = 'Password/PIN salah! (Gunakan PIN default: 123456)';
+                    loginForm.value.error = 'Kredensial salah! Pastikan Kode Lisensi, Username, dan PIN sesuai dengan yang Anda daftarkan.';
                     loginForm.value.password = ''; 
                 }
             };
@@ -1087,9 +1160,28 @@
             const handleLogout = () => {
                 if (confirm('Apakah Anda yakin ingin keluar dari sesi aplikasi?')) {
                     isLoggedIn.value = false;
+                    currentLicense.value = '';
                     localStorage.removeItem('eunoia_session');
+                    localStorage.removeItem('eunoia_active_license');
                     currentMenu.value = 'data-siswa'; 
+                    
+                    // Bersihkan memory virtual agar tidak mengintip data orang lain
+                    datastore.value = { siswa: [], presensi: {}, bab: [], nilai: [], ujian6: [], jurnal: [], catatan: [] };
+                    settings.value = getDefaultSettings();
                 }
+            };
+
+            const loadDataForLicense = (lic) => {
+                const localStore = localStorage.getItem(`eunoia_datastore_${lic}`);
+                const localSet = localStorage.getItem(`eunoia_settings_${lic}`);
+                
+                if (localStore) datastore.value = JSON.parse(localStore);
+                else datastore.value = { siswa: [], presensi: {}, bab: [], nilai: [], ujian6: [], jurnal: [], catatan: [] };
+                
+                if (localSet) settings.value = JSON.parse(localSet);
+                else settings.value = getDefaultSettings();
+                
+                if (datastore.value.bab.length > 0) filter.value.babNilai = datastore.value.bab[0].id;
             };
 
             const showImportSiswa = ref(false);
@@ -1145,16 +1237,15 @@
             });
 
             const saveToLocal = () => {
-                localStorage.setItem('eunoia_datastore', JSON.stringify(datastore.value));
-                localStorage.setItem('eunoia_settings', JSON.stringify(settings.value));
+                if(!currentLicense.value) return; // Mencegah data tersimpan di luar brankas lisensi
+                localStorage.setItem(`eunoia_datastore_${currentLicense.value}`, JSON.stringify(datastore.value));
+                localStorage.setItem(`eunoia_settings_${currentLicense.value}`, JSON.stringify(settings.value));
             };
 
             onMounted(() => {
-                const localStore = localStorage.getItem('eunoia_datastore');
-                const localSet = localStorage.getItem('eunoia_settings');
-                if (localStore) datastore.value = JSON.parse(localStore);
-                if (localSet) settings.value = JSON.parse(localSet);
-                if (datastore.value.bab.length > 0) filter.value.babNilai = datastore.value.bab[0].id;
+                if (isLoggedIn.value && currentLicense.value) {
+                    loadDataForLicense(currentLicense.value);
+                }
             });
 
             watch(datastore, () => saveToLocal(), { deep: true });
