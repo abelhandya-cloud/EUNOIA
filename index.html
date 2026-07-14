@@ -786,6 +786,24 @@
                         </div>
                     </div>
 
+                    <!-- Manajemen Database Kelas / Rombel -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                        <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-users mr-2 text-slate-500"></i>Manajemen Database Kelas / Rombel</h3>
+                        <div class="pt-2">
+                            <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Tambah/Edit Opsi Kelas</label>
+                            <div class="flex gap-2 mb-3">
+                                <input type="text" v-model="formInput.newKelas" placeholder="Ketik nama kelas baru (misal: 1C)..." class="flex-1 border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                <button @click="tambahKelasOpt()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-900 transition">Tambah</button>
+                            </div>
+                            <div class="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border border-gray-100 rounded-lg bg-gray-50/50">
+                                <span v-for="k in listRombel" class="bg-white border border-gray-200 text-gray-700 px-3 py-1 rounded-lg text-xs font-medium flex items-center shadow-sm">
+                                    Kelas {{ k }}
+                                    <button @click="hapusKelasOpt(k)" class="text-red-500 ml-2 hover:text-red-700"><i class="fa-solid fa-xmark"></i></button>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Kustomisasi Tema Skema Warna -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                         <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-palette mr-2 text-slate-500"></i>Tema Warna Sidebar</h3>
@@ -986,10 +1004,19 @@
                 <h4 class="text-base font-bold text-gray-900 mb-4">Catatan Observasi Perilaku & Akademik</h4>
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase">Pilih Siswa</label>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase">Filter Kelas</label>
+                        <select v-model="modal.catatan.filterKelas" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none bg-white">
+                            <option value="" disabled>-- Pilih Kelas --</option>
+                            <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase">Pilih Nama Siswa</label>
                         <select v-model="modal.catatan.data.siswaId" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none bg-white">
                             <option value="" disabled>-- Pilih Siswa --</option>
-                            <option v-for="s in datastore.siswa" :value="s.id">{{ s.nama }} ({{ s.kelas }})</option>
+                            <option v-for="s in datastore.siswa.filter(student => student.kelas === modal.catatan.filterKelas)" :value="s.id">
+                                {{ s.nama }}
+                            </option>
                         </select>
                     </div>
                     <div>
@@ -1209,6 +1236,7 @@
                 semester: 'Ganjil',
                 mapelAktif: 'Bahasa Inggris',
                 listMapel: ['Bahasa Inggris', 'Matematika', 'Bahasa Indonesia', 'IPAS', 'Pendidikan Pancasila'],
+                listKelas: ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'],
                 themeColor: '#b91c1c', 
                 parentSpreadsheetUrl: '',
                 username: 'eunoia',
@@ -1255,6 +1283,7 @@
                 semester: 'Ganjil',
                 mapelAktif: 'Bahasa Inggris',
                 listMapel: ['Bahasa Inggris', 'Matematika', 'Bahasa Indonesia', 'IPAS', 'Pendidikan Pancasila'],
+                listKelas: ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'],
                 themeColor: '#b91c1c', 
                 parentSpreadsheetUrl: '',
                 username: 'eunoia',
@@ -1334,14 +1363,14 @@
             const presensiViewMode = ref('harian');
 
             const formSiswaCepat = ref({ nis: '', nama: '' });
-            const formInput = ref({ newMapel: '' });
+            const formInput = ref({ newMapel: '', newKelas: '' });
 
             // --- MODAL WINDOW CONTROL ---
             const modal = ref({
                 siswa: { show: false, data: { id: null, nis: '', nama: '' } },
-                bab: { show: false, isEdit: false, data: { id: null, nomor: null, nama: '', tp: '' } },
+                bab: { show: false, isEdit: false, data: { id: null, nomor: null, nama: '', tp: '', kelas: '' } },
                 jurnal: { show: false, isEdit: false, data: { id: null, tanggal: '', kelas: '', materi: '', pencapaian: '', hambatan: '' } },
-                catatan: { show: false, isEdit: false, data: { id: null, siswaId: '', tipe: 'Akademis', narasi: '' } }
+                catatan: { show: false, isEdit: false, filterKelas: '', data: { id: null, siswaId: '', tipe: 'Akademis', narasi: '' } }
             });
 
             // --- STATE & FUNGSI FIREBASE CLOUD HUB (BARU) ---
@@ -1418,12 +1447,10 @@
             const printMeta = ref({ judul: '', fokusKelas: '', headers: [], keys: [], rows: [] });
 
             const listRombel = computed(() => {
-                let res = [];
-                for (let i = 1; i <= 6; i++) {
-                    res.push(`${i}A`);
-                    res.push(`${i}B`);
+                if (!settings.value.listKelas || settings.value.listKelas.length === 0) {
+                    return ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'];
                 }
-                return res;
+                return settings.value.listKelas;
             });
 
             const getBrightness = (hexColor) => {
@@ -1891,9 +1918,12 @@
                 if (catatan) {
                     modal.value.catatan.isEdit = true;
                     modal.value.catatan.data = { ...catatan };
+                    let student = datastore.value.siswa.find(s => s.id === catatan.siswaId);
+                    modal.value.catatan.filterKelas = student ? student.kelas : '';
                 } else {
                     modal.value.catatan.isEdit = false;
                     modal.value.catatan.data = { id: Date.now(), siswaId: '', tipe: 'Akademis', narasi: '' };
+                    modal.value.catatan.filterKelas = filter.value.kelasCatatan !== 'Semua' ? filter.value.kelasCatatan : (listRombel.value[0] || '');
                 }
                 modal.value.catatan.show = true;
             };
@@ -1985,6 +2015,25 @@
             const hapusMapelOpt = (m) => {
                 settings.value.listMapel = settings.value.listMapel.filter(item => item !== m);
                 if (settings.value.mapelAktif === m) settings.value.mapelAktif = '';
+            };
+
+            const tambahKelasOpt = () => {
+                let k = formInput.value.newKelas ? formInput.value.newKelas.trim().toUpperCase() : '';
+                if (k) {
+                    if (!settings.value.listKelas) settings.value.listKelas = ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'];
+                    if (!settings.value.listKelas.includes(k)) {
+                        settings.value.listKelas.push(k);
+                        settings.value.listKelas.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
+                        formInput.value.newKelas = '';
+                    }
+                }
+            };
+
+            const hapusKelasOpt = (k) => {
+                if (confirm(`Menghapus kelas ${k} akan berpotensi mempengaruhi filter pencarian siswa. Lanjutkan?`)) {
+                    if (!settings.value.listKelas) settings.value.listKelas = ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'];
+                    settings.value.listKelas = settings.value.listKelas.filter(item => item !== k);
+                }
             };
 
             const downloadBackupJSON = () => {
@@ -2258,6 +2307,8 @@
                 triggerPrintRekap,
                 tambahMapelOpt,
                 hapusMapelOpt,
+                tambahKelasOpt,
+                hapusKelasOpt,
                 downloadBackupJSON,
                 uploadRestoreJSON,
                 triggerPrint,
