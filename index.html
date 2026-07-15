@@ -1631,7 +1631,11 @@ service cloud.firestore {
                 catatan: { show: false, isEdit: false, filterKelas: '', data: { id: null, siswaId: '', tanggal: '', jenis: 'Tambah', poin: 1, narasi: '' } }
             });
 
-            // --- STATE & FUNGSI FIREBASE CLOUD HUB (BARU) ---
+            // --- STATE & FUNGSI FIREBASE CLOUD HUB (OTOMATIS) ---
+            let fbApp = null, fbDb = null, fbAuth = null, fbUnsubscribe = null;
+            let isApplyingRemoteUpdate = false;
+            let uploadTimeout = null;
+
             const isFirebaseTesting = ref(false);
             const isFirebaseConnecting = ref(false);
             const isFirebaseConnected = ref(false);
@@ -1657,10 +1661,76 @@ service cloud.firestore {
             if (!localStorage.getItem('eunoia_device_id')) localStorage.setItem('eunoia_device_id', deviceId.value);
             if (!localStorage.getItem('eunoia_sync_code')) localStorage.setItem('eunoia_sync_code', syncCode.value);
 
+            /* LOGIKA LISTENER CLOUD DATA (DOWNLOAD OTOMATIS) */
+            const startCloudSync = async () => {
+                if (!fbDb || !syncCode.value) return;
+                const { doc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                const roomRef = doc(fbDb, 'artifacts', 'eunoia', 'public', 'data', 'sync_rooms', syncCode.value);
+                
+                if (fbUnsubscribe) fbUnsubscribe(); // Reset listener lama jika ada
+                
+                fbUnsubscribe = onSnapshot(roomRef, (snapshot) => {
+                    if (snapshot.exists()) {
+                        const data = snapshot.data();
+                        if (data.lastUpdatedBy === deviceId.value) return; // Abaikan pantulan data yang kita kirim sendiri
+                        
+                        isApplyingRemoteUpdate = true;
+                        try {
+                            if (data.datastore) datastore.value = JSON.parse(data.datastore);
+                            if (data.settings) settings.value = JSON.parse(data.settings);
+                            saveToLocal(); // Paksa simpan lokal setelah menerima pembaruan awan
+                        } catch (e) {
+                            console.error("Kesalahan parsing data dari Cloud", e);
+                        }
+                        
+                        // Jeda singkat agar sistem mendeteksi ini sebagai tarikan data (bukan hasil ketikan manual)
+                        setTimeout(() => { isApplyingRemoteUpdate = false; }, 800);
+                    }
+                }, (error) => {
+                    console.error("Gagal mendengarkan Snapshot", error);
+                    showFirebaseStatus("Koneksi Real-time terputus. Periksa izin akses (Rules) database Anda.", "error");
+                });
+            };
+
+            /* LOGIKA PENGUNGGAH DATA (UPLOAD OTOMATIS & TERJADWAL) */
+            const uploadToCloud = (force = false) => {
+                if (!isFirebaseConnected.value || !isSyncActive.value || isApplyingRemoteUpdate || !fbDb) return;
+                
+                clearTimeout(uploadTimeout);
+                
+                const executeUpload = async () => {
+                    isSyncing.value = true;
+                    try {
+                        const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                        const roomRef = doc(fbDb, 'artifacts', 'eunoia', 'public', 'data', 'sync_rooms', syncCode.value);
+                        const payload = {
+                            datastore: JSON.stringify(datastore.value),
+                            settings: JSON.stringify(settings.value),
+                            lastUpdatedBy: deviceId.value,
+                            timestamp: Date.now()
+                        };
+                        await setDoc(roomRef, payload);
+                        if (force) showFirebaseStatus('Sinkronisasi Awan Selesai. Data EUNOIA Anda kini mutakhir!', 'success');
+                    } catch (err) {
+                        console.error("Kesalahan upload ke Cloud", err);
+                        showFirebaseStatus('Gagal menyinkronkan data: ' + err.message, 'error');
+                    } finally {
+                        isSyncing.value = false;
+                    }
+                };
+
+                if (force) executeUpload();
+                else uploadTimeout = setTimeout(executeUpload, 1500); // Debounce 1.5 detik agar tidak spam jaringan
+            };
+
             const aktifkanPerangkatUtama = () => {
                 isSyncActive.value = true;
                 localStorage.setItem('eunoia_sync_active', 'true');
                 showFirebaseStatus('Perangkat ini berhasil diatur sebagai Master. Silakan gunakan Kode Akses yang tersedia.', 'success');
+                if (isFirebaseConnected.value) {
+                    startCloudSync();
+                    uploadToCloud(true); // Kirim data segera sebagai fondasi/base
+                }
             };
 
             const hubungkanKePerangkatLain = () => {
@@ -1673,11 +1743,20 @@ service cloud.firestore {
                 isSyncActive.value = true;
                 localStorage.setItem('eunoia_sync_active', 'true');
                 inputSyncCode.value = ''; // Reset input form
-                showFirebaseStatus('Berhasil dihubungkan! Identitas perangkat sinkron dengan Master.', 'success');
+                showFirebaseStatus('Berhasil dihubungkan! Identitas sinkron dengan Master.', 'success');
+                if (isFirebaseConnected.value) {
+                    startCloudSync();
+                } else {
+                    showFirebaseStatus('Silakan klik Hubungkan Firebase terlebih dahulu agar data mulai mengalir.', 'info');
+                }
             };
 
             const putuskanSinkronisasi = () => {
                 if (confirm('Apakah Anda yakin ingin memutus koneksi sinkronisasi perangkat ini?')) {
+                    if (fbUnsubscribe) {
+                        fbUnsubscribe();
+                        fbUnsubscribe = null;
+                    }
                     isFirebaseConnected.value = false;
                     isSyncing.value = false;
                     isSyncActive.value = false;
@@ -1722,31 +1801,61 @@ service cloud.firestore {
                 showFirebaseStatus('Kredensial konfigurasi Firebase berhasil disimpan ke memori lokal.', 'success');
             };
 
-            const ujiKoneksiFirebase = () => {
+            const ujiKoneksiFirebase = async () => {
                 if (!settings.value.firebase.apiKey || !settings.value.firebase.projectId) {
                     showFirebaseStatus('Gagal! API Key dan Project ID Firebase wajib diisi untuk melakukan pengujian.', 'error');
                     return;
                 }
                 isFirebaseTesting.value = true;
                 showFirebaseStatus('Melakukan ping ke endpoint Firebase Hub...', 'info');
-                setTimeout(() => {
+                try {
+                    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
+                    const { getAuth, signInAnonymously } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
+                    
+                    const testApp = initializeApp(settings.value.firebase, "TestApp_" + Date.now());
+                    const testAuth = getAuth(testApp);
+                    await signInAnonymously(testAuth);
+                    
                     isFirebaseTesting.value = false;
-                    showFirebaseStatus('Ping berhasil! Hub Gateway merespons (Status: OK).', 'success');
-                }, 1500);
+                    showFirebaseStatus('Ping berhasil! Autentikasi Gateway merespons (Status: OK).', 'success');
+                } catch (err) {
+                    isFirebaseTesting.value = false;
+                    showFirebaseStatus('Uji Koneksi Gagal: ' + err.message, 'error');
+                }
             };
 
-            const hubungkanFirebase = () => {
+            const hubungkanFirebase = async () => {
                 if (!settings.value.firebase.apiKey || !settings.value.firebase.projectId) {
                     showFirebaseStatus('Gagal menghubungkan! Mohon lengkapi parameter Firebase.', 'error');
                     return;
                 }
                 isFirebaseConnecting.value = true;
                 showFirebaseStatus('Membuat sesi koneksi aman (WSS) ke Gateway Server...', 'info');
-                setTimeout(() => {
+                
+                try {
+                    const { initializeApp, getApps, getApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
+                    const { getAuth, signInAnonymously } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
+                    const { getFirestore } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                    
+                    const apps = getApps();
+                    fbApp = apps.length === 0 ? initializeApp(settings.value.firebase) : getApp();
+                    
+                    fbAuth = getAuth(fbApp);
+                    fbDb = getFirestore(fbApp);
+                    
+                    await signInAnonymously(fbAuth);
+                    
                     isFirebaseConnecting.value = false;
                     isFirebaseConnected.value = true;
                     showFirebaseStatus('Koneksi Established! Sistem telah siap untuk Sinkronisasi Awan.', 'success');
-                }, 2000);
+                    
+                    if (isSyncActive.value) {
+                        startCloudSync(); // Mulai menambang data dari cloud bila perangkat sinkron aktif
+                    }
+                } catch (err) {
+                    isFirebaseConnecting.value = false;
+                    showFirebaseStatus('Gagal terkoneksi: ' + err.message, 'error');
+                }
             };
 
             const sinkronisasiAwan = () => {
@@ -1754,12 +1863,8 @@ service cloud.firestore {
                     showFirebaseStatus('Hubungkan Firebase terlebih dahulu sebelum memicu proses sinkronisasi awan.', 'error');
                     return;
                 }
-                isSyncing.value = true;
-                showFirebaseStatus('Mengunggah & memvalidasi metadata Multi-Device ke Cloud...', 'info');
-                setTimeout(() => {
-                    isSyncing.value = false;
-                    showFirebaseStatus('Sinkronisasi Awan 100% Selesai. Data EUNOIA Anda kini mutakhir di semua perangkat!', 'success');
-                }, 2500);
+                showFirebaseStatus('Memaksa pengiriman paket data ke Cloud Hub...', 'info');
+                uploadToCloud(true);
             };
 
             const printMeta = ref({ judul: '', fokusKelas: '', headers: [], keys: [], rows: [] });
@@ -1805,8 +1910,16 @@ service cloud.firestore {
                 }
             });
 
-            watch(datastore, () => saveToLocal(), { deep: true });
-            watch(settings, () => saveToLocal(), { deep: true });
+            // Pengawas (Watchers) untuk Auto-Save Local & Auto-Upload Cloud
+            watch(datastore, () => {
+                saveToLocal();
+                uploadToCloud();
+            }, { deep: true });
+            
+            watch(settings, () => {
+                saveToLocal();
+                uploadToCloud();
+            }, { deep: true });
 
             watch(() => filter.value.kelasNilai, (newKelas) => {
                 const availableBab = datastore.value.bab.filter(b => b.kelas === newKelas || (!b.kelas && newKelas === '1A'));
