@@ -926,33 +926,64 @@
                         </div>
 
                         <div class="border border-gray-200 rounded-xl bg-slate-50/50 p-3 space-y-3">
-                            <!-- Status Panel -->
-                            <div class="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center shadow-sm">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-3 h-3 rounded-full" :class="isFirebaseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'"></div>
-                                    <div>
-                                        <div class="text-xs font-bold" :class="isFirebaseConnected ? 'text-emerald-500' : 'text-gray-500'">
-                                            {{ isFirebaseConnected ? 'Aktif & Sinkron (Terhubung)' : 'Menunggu Koneksi (Luring)' }}
-                                        </div>
-                                        <div class="text-[10px] text-gray-400 font-mono mt-0.5">ID Device: {{ deviceId }}</div>
-                                    </div>
-                                </div>
-                                <button v-if="isFirebaseConnected" @click="putuskanSinkronisasi" class="border border-red-200 text-red-500 hover:bg-red-50 px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition">PUTUSKAN</button>
-                            </div>
-
-                            <!-- Code Panel -->
-                            <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm text-center">
-                                <h4 class="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-4">Kode Akses Sinkronisasi Perangkat Anda</h4>
-                                <div class="flex justify-center items-center space-x-3 mb-4">
-                                    <div class="border border-amber-200 rounded-lg px-8 py-3 text-2xl font-black text-amber-500 tracking-widest bg-white shadow-sm">
-                                        {{ syncCode }}
-                                    </div>
-                                    <button @click="copySyncCode" class="border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600 p-3.5 rounded-lg transition shadow-sm" title="Salin Kode">
-                                        <i class="fa-regular fa-copy text-lg"></i>
+                            
+                            <!-- STATE 1: IDLE (Opsi Pilihan Setup Multi-Device) -->
+                            <div v-if="!isSyncActive" class="space-y-4 p-1">
+                                <!-- Opsi A: Perangkat Utama -->
+                                <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative overflow-hidden">
+                                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>
+                                    <h4 class="text-xs font-bold text-amber-600 tracking-wide mb-1.5 uppercase">A. Daftarkan Perangkat Utama</h4>
+                                    <p class="text-[11px] text-gray-500 mb-4 leading-relaxed">Gunakan perangkat ini sebagai sumber database utama (Master), kemudian *generate* kode sinkronisasi.</p>
+                                    <button @click="aktifkanPerangkatUtama" class="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-6 py-3 rounded-lg transition shadow-sm uppercase tracking-wider">
+                                        <i class="fa-solid fa-cloud-arrow-up mr-2"></i> Aktifkan Kode Sinkronisasi
                                     </button>
                                 </div>
-                                <p class="text-[10px] text-gray-400">Masukkan kode ini di HP, tablet, atau laptop lain untuk menyinkronkan seluruh data KBM secara instan!</p>
+
+                                <!-- Opsi B: Perangkat Lain (Klien) -->
+                                <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative overflow-hidden">
+                                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-[#1e293b]"></div>
+                                    <h4 class="text-xs font-bold text-slate-700 tracking-wide mb-1.5 uppercase">B. Hubungkan Ke Perangkat Lain</h4>
+                                    <p class="text-[11px] text-gray-500 mb-4 leading-relaxed">Masukkan Kode Akses yang tertera di layar perangkat utama Anda untuk mengambil alih dan menyinkronkan data.</p>
+                                    <div class="flex flex-col sm:flex-row gap-3">
+                                        <input type="text" v-model="inputSyncCode" placeholder="Contoh: LNT-XXXXX" class="flex-1 max-w-sm bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-xs font-mono font-bold focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 uppercase">
+                                        <button @click="hubungkanKePerangkatLain" class="bg-[#1e293b] hover:bg-slate-800 text-white font-bold text-[11px] px-8 py-3 rounded-lg transition shadow-sm uppercase tracking-wider">
+                                            Hubungkan
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
+
+                            <!-- STATE 2: ACTIVE (Status Panel & Kode Akses) -->
+                            <div v-else class="space-y-3">
+                                <!-- Status Panel -->
+                                <div class="bg-white border border-gray-200 rounded-lg p-4 flex flex-wrap gap-4 justify-between items-center shadow-sm">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-3 h-3 rounded-full" :class="isFirebaseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500'"></div>
+                                        <div>
+                                            <div class="text-xs font-bold text-emerald-600">
+                                                Aktif & Sinkron (Siap Terhubung)
+                                            </div>
+                                            <div class="text-[10px] text-gray-400 font-mono mt-0.5">ID Device: {{ deviceId }}</div>
+                                        </div>
+                                    </div>
+                                    <button @click="putuskanSinkronisasi" class="border border-red-200 text-red-500 hover:bg-red-50 px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition">PUTUSKAN</button>
+                                </div>
+
+                                <!-- Code Panel -->
+                                <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm text-center">
+                                    <h4 class="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-4">Kode Akses Sinkronisasi Perangkat Anda</h4>
+                                    <div class="flex justify-center items-center space-x-3 mb-4">
+                                        <div class="border border-amber-200 rounded-lg px-8 py-3 text-2xl font-black text-amber-500 tracking-widest bg-amber-50/30 shadow-inner">
+                                            {{ syncCode }}
+                                        </div>
+                                        <button @click="copySyncCode" class="border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600 p-3.5 rounded-lg transition shadow-sm" title="Salin Kode">
+                                            <i class="fa-regular fa-copy text-lg"></i>
+                                        </button>
+                                    </div>
+                                    <p class="text-[10px] text-gray-400">Masukkan kode ini di HP, tablet, atau laptop lain untuk menyinkronkan seluruh data KBM secara instan!</p>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
 
@@ -1607,6 +1638,10 @@ service cloud.firestore {
             const isSyncing = ref(false);
             const firebaseStatus = ref({ show: false, message: '', bgClass: '', iconClass: '' });
 
+            // State & Logika UI Pilihan Sinkronisasi (Baru)
+            const isSyncActive = ref(localStorage.getItem('eunoia_sync_active') === 'true');
+            const inputSyncCode = ref('');
+
             // Generate Device ID & Sync Code untuk UI Sinkronisasi
             const generateDeviceId = () => Math.random().toString(36).substring(2, 10).toUpperCase() + '...';
             const generateSyncCode = () => {
@@ -1622,10 +1657,31 @@ service cloud.firestore {
             if (!localStorage.getItem('eunoia_device_id')) localStorage.setItem('eunoia_device_id', deviceId.value);
             if (!localStorage.getItem('eunoia_sync_code')) localStorage.setItem('eunoia_sync_code', syncCode.value);
 
+            const aktifkanPerangkatUtama = () => {
+                isSyncActive.value = true;
+                localStorage.setItem('eunoia_sync_active', 'true');
+                showFirebaseStatus('Perangkat ini berhasil diatur sebagai Master. Silakan gunakan Kode Akses yang tersedia.', 'success');
+            };
+
+            const hubungkanKePerangkatLain = () => {
+                const code = inputSyncCode.value.trim().toUpperCase();
+                if (!code || code.length < 5) {
+                    return showFirebaseStatus('Format Kode Akses tidak valid. Silakan periksa kembali!', 'error');
+                }
+                syncCode.value = code;
+                localStorage.setItem('eunoia_sync_code', code);
+                isSyncActive.value = true;
+                localStorage.setItem('eunoia_sync_active', 'true');
+                inputSyncCode.value = ''; // Reset input form
+                showFirebaseStatus('Berhasil dihubungkan! Identitas perangkat sinkron dengan Master.', 'success');
+            };
+
             const putuskanSinkronisasi = () => {
                 if (confirm('Apakah Anda yakin ingin memutus koneksi sinkronisasi perangkat ini?')) {
                     isFirebaseConnected.value = false;
                     isSyncing.value = false;
+                    isSyncActive.value = false;
+                    localStorage.setItem('eunoia_sync_active', 'false');
                     showFirebaseStatus('Koneksi sinkronisasi diputus. Aplikasi kembali ke mode penyimpanan luring.', 'info');
                 }
             };
@@ -2636,6 +2692,10 @@ service cloud.firestore {
                 sinkronisasiAwan,
                 deviceId,
                 syncCode,
+                isSyncActive,
+                inputSyncCode,
+                aktifkanPerangkatUtama,
+                hubungkanKePerangkatLain,
                 putuskanSinkronisasi,
                 copySyncCode,
                 showPrintPreview,
