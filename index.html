@@ -110,7 +110,9 @@
     <!-- ====== KONTEN UTAMA APLIKASI ====== -->
     <div v-else class="flex min-h-screen relative w-full animate-in fade-in duration-500">
         <!-- SIDEBAR -->
-        <aside :style="{ backgroundColor: settings.themeColor }" class="w-64 min-h-screen shadow-xl transition-all duration-300 no-print flex flex-col justify-between shrink-0">
+        <aside :style="{ backgroundColor: settings.themeColor }" 
+               :class="isSidebarOpen ? 'w-64' : 'w-0 opacity-0 overflow-hidden'" 
+               class="min-h-screen shadow-xl transition-all duration-300 no-print flex flex-col justify-between shrink-0 whitespace-nowrap">
             <div>
                 <!-- App Logo / Header -->
                 <div class="p-6 pt-8 pb-4 border-b border-black/10">
@@ -162,9 +164,15 @@
         <main class="flex-1 flex flex-col min-w-0 overflow-x-hidden bg-white">
             <!-- TOPBAR -->
             <header class="bg-white px-8 py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print border-b border-gray-100 relative z-10">
-                <div>
-                    <h2 class="text-xl font-bold text-gray-900 capitalize">{{ getMenuName(currentMenu) }}</h2>
-                    <p class="text-xs text-gray-500 mt-0.5">{{ settings.namaSekolah }} • Tahun Ajaran {{ settings.tahunAjaran }}</p>
+                <div class="flex items-center gap-4">
+                    <!-- Tombol Toggle Sidebar -->
+                    <button @click="toggleSidebar" class="w-10 h-10 shrink-0 bg-gray-50 border border-gray-200 text-gray-500 rounded-xl flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition shadow-sm focus:outline-none active:scale-95" title="Sembunyikan/Tampilkan Sidebar">
+                        <i class="fa-solid" :class="isSidebarOpen ? 'fa-bars-staggered' : 'fa-bars'"></i>
+                    </button>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 capitalize">{{ getMenuName(currentMenu) }}</h2>
+                        <p class="text-xs text-gray-500 mt-0.5">{{ settings.namaSekolah }} • Tahun Ajaran {{ settings.tahunAjaran }}</p>
+                    </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-4 md:gap-6">
                     <div class="flex items-center space-x-2 text-sm">
@@ -1484,6 +1492,12 @@ service cloud.firestore {
             
             const showLogoutModal = ref(false);
 
+            // STATE UNTUK TOGGLE SIDEBAR
+            const isSidebarOpen = ref(true);
+            const toggleSidebar = () => {
+                isSidebarOpen.value = !isSidebarOpen.value;
+            };
+
             const getDefaultSettings = () => ({
                 namaSekolah: 'SDN 1 Menteng',
                 alamatSekolah: 'Jl. Menteng Raya No. 1, Jakarta',
@@ -2627,7 +2641,9 @@ service cloud.firestore {
                 showPrintPreview,
                 executeNativePrint,
                 copyRulesText,
-                copyFirebaseRules
+                copyFirebaseRules,
+                isSidebarOpen,
+                toggleSidebar
             };
         }
     }).mount('#app');
