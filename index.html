@@ -126,6 +126,16 @@
                         <i :class="[menu.icon, 'w-5 text-center text-lg']"></i>
                         <span>{{ menu.name }}</span>
                     </button>
+                    
+                    <!-- Tombol Logout Pindahan -->
+                    <div class="pt-2 mt-2 border-t border-black/10">
+                        <button @click="handleLogout" 
+                                :class="sidebarTextColor"
+                                class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm transition duration-200 hover:bg-black/20 opacity-95 group">
+                            <i class="fa-solid fa-arrow-right-from-bracket w-5 text-center text-lg group-hover:text-red-400 transition-colors"></i>
+                            <span class="font-bold group-hover:text-red-400 transition-colors">Keluar Aplikasi</span>
+                        </button>
+                    </div>
                 </nav>
             </div>
 
@@ -176,10 +186,6 @@
                             <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
                         </select>
                     </div>
-                    <!-- Tombol Logout -->
-                    <button @click="handleLogout" class="h-10 w-10 rounded-full bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700 flex items-center justify-center transition shadow-sm border border-red-100" title="Keluar / Logout Aplikasi">
-                        <i class="fa-solid fa-power-off"></i>
-                    </button>
                 </div>
             </header>
 
@@ -214,16 +220,18 @@
                             <!-- JSON Import -->
                             <div class="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm flex flex-col">
                                 <h5 class="text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">2. Import via JSON (Paste)</h5>
-                                <textarea v-model="jsonImportSiswa" placeholder='Contoh: [{"nis":"1011", "nama":"Budi Setiawan"}, {"nis":"1012", "nama":"Siti Aminah"}]' class="w-full flex-1 border border-gray-300 rounded p-2 text-xs font-mono focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 mb-2 shadow-inner resize-none"></textarea>
+                                <textarea v-model="jsonImportSiswa" placeholder='Contoh: [{"nis":"1011", "nisn":"0123", "nama":"Budi Setiawan", "ttl":"Bandung, 10 Mei 2012"}]' class="w-full flex-1 border border-gray-300 rounded p-2 text-xs font-mono focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 mb-2 shadow-inner resize-none"></textarea>
                                 <button @click="handleJsonImportSiswa()" class="text-xs bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded transition font-bold shadow-sm">Proses Data JSON</button>
                             </div>
                         </div>
                     </div>
 
                     <!-- Input Tambah Siswa Cepat -->
-                    <div class="bg-gray-50/50 p-4 rounded-xl border border-gray-100 mb-6 flex flex-col sm:flex-row gap-4">
-                        <input type="text" v-model="formSiswaCepat.nis" placeholder="NIS" class="w-full sm:w-1/3 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 shadow-sm">
-                        <input type="text" v-model="formSiswaCepat.nama" placeholder="Nama Lengkap Siswa" class="w-full sm:w-2/3 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 shadow-sm">
+                    <div class="bg-gray-50/50 p-4 rounded-xl border border-gray-100 mb-6 flex flex-col sm:flex-row gap-4 flex-wrap">
+                        <input type="text" v-model="formSiswaCepat.nis" placeholder="NIS" class="w-full sm:w-1/6 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 shadow-sm">
+                        <input type="text" v-model="formSiswaCepat.nisn" placeholder="NISN" class="w-full sm:w-1/6 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 shadow-sm">
+                        <input type="text" v-model="formSiswaCepat.nama" placeholder="Nama Lengkap Siswa" class="w-full sm:flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 shadow-sm">
+                        <input type="text" v-model="formSiswaCepat.ttl" placeholder="Tempat, Tgl Lahir" class="w-full sm:w-1/4 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 shadow-sm">
                         <button @click="tambahSiswaCepat()" class="bg-[#1e293b] hover:bg-slate-800 text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition shadow-md whitespace-nowrap">
                             Tambah Siswa
                         </button>
@@ -236,7 +244,9 @@
                                 <tr>
                                     <th class="p-4 w-16 text-center uppercase">No</th>
                                     <th class="p-4 uppercase">NIS</th>
+                                    <th class="p-4 uppercase">NISN</th>
                                     <th class="p-4 uppercase">Nama Siswa</th>
+                                    <th class="p-4 uppercase">Tempat, Tgl Lahir</th>
                                     <th class="p-4 text-right uppercase w-32">Aksi</th>
                                 </tr>
                             </thead>
@@ -244,14 +254,16 @@
                                 <tr v-for="(siswa, idx) in siswaTerfilterGlobal" :key="siswa.id" class="hover:bg-gray-50/50 transition">
                                     <td class="p-4 text-center text-gray-500">{{ idx + 1 }}</td>
                                     <td class="p-4 font-mono text-gray-600">{{ siswa.nis }}</td>
+                                    <td class="p-4 font-mono text-gray-600">{{ siswa.nisn || '-' }}</td>
                                     <td class="p-4 font-semibold text-gray-700">{{ siswa.nama }}</td>
+                                    <td class="p-4 text-gray-600">{{ siswa.ttl || '-' }}</td>
                                     <td class="p-4 text-right space-x-1">
                                         <button @click="editSiswa(siswa)" class="text-blue-600 font-bold text-xs hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded transition">Edit</button>
                                         <button @click="hapusSiswa(siswa.id)" class="text-red-600 font-bold text-xs hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded transition">Hapus</button>
                                     </td>
                                 </tr>
                                 <tr v-if="siswaTerfilterGlobal.length === 0">
-                                    <td colspan="4" class="p-8 text-center text-gray-400 border-t border-dashed border-gray-200">Belum ada data siswa di Kelas {{ filter.globalKelas }}.</td>
+                                    <td colspan="6" class="p-8 text-center text-gray-400 border-t border-dashed border-gray-200">Belum ada data siswa di Kelas {{ filter.globalKelas }}.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -662,8 +674,8 @@
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                             <div>
-                                <h3 class="text-lg font-bold text-gray-800">Catatan Khusus Perkembangan Siswa</h3>
-                                <p class="text-xs text-gray-400 mt-0.5 mb-3">Lembar observasi perilaku, hambatan klinis, atau akselerasi akademis khusus.</p>
+                                <h3 class="text-lg font-bold text-gray-800">Catatan Kredit Point Siswa</h3>
+                                <p class="text-xs text-gray-400 mt-0.5 mb-3">Sistem pencatatan riwayat prestasi (kredit) dan pelanggaran (sanksi) siswa.</p>
                                 <div class="flex items-center gap-3">
                                     <label class="text-sm font-semibold text-gray-600">Filter Kelas:</label>
                                     <select v-model="filter.kelasCatatan" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none bg-white">
@@ -673,7 +685,7 @@
                                 </div>
                             </div>
                             <div class="space-x-2">
-                                <button @click="openModalCatatan()" class="bg-[#1e293b] hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Buat Catatan</button>
+                                <button @click="openModalCatatan()" class="bg-[#1e293b] hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Tambah Kredit Point</button>
                                 <button @click="triggerPrint('Catatan Siswa')" class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold px-4 py-2.5 rounded-lg transition"><i class="fa-solid fa-print mr-2"></i>Cetak PDF</button>
                             </div>
                         </div>
@@ -681,19 +693,28 @@
                             <table class="w-full text-left border-collapse text-sm">
                                 <thead class="bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
                                     <tr>
-                                        <th class="p-4 w-52">Nama Siswa</th>
-                                        <th class="p-4 w-32 text-center">Tipe</th>
-                                        <th class="p-4">Deskripsi Observasi & Catatan</th>
+                                        <th class="p-4 w-32">Tanggal</th>
+                                        <th class="p-4 w-48">Nama Siswa</th>
+                                        <th class="p-4 w-24 text-center">Jenis</th>
+                                        <th class="p-4 w-24 text-center">Poin</th>
+                                        <th class="p-4">Deskripsi Catatan</th>
                                         <th class="p-4 text-center w-24">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100 bg-white">
                                     <tr v-for="c in catatanTerfilter" :key="c.id" class="hover:bg-gray-50/50">
+                                        <td class="p-4 font-medium text-gray-500 text-xs">{{ c.tanggal ? formatTanggalIndo(c.tanggal) : '-' }}</td>
                                         <td class="p-4 font-semibold text-gray-700">{{ getNamaSiswaById(c.siswaId) }}</td>
                                         <td class="p-4 text-center">
-                                            <span :class="c.tipe === 'Akademis' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'" class="px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wide">
-                                                {{ c.tipe }}
+                                            <span v-if="c.jenis === 'Tambah' || c.tipe === 'Akademis'" class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide">
+                                                <i class="fa-solid fa-plus mr-1"></i> Kredit
                                             </span>
+                                            <span v-else class="bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide">
+                                                <i class="fa-solid fa-minus mr-1"></i> Sanksi
+                                            </span>
+                                        </td>
+                                        <td class="p-4 text-center font-black text-base" :class="(c.jenis === 'Tambah' || c.tipe === 'Akademis') ? 'text-emerald-500' : 'text-red-500'">
+                                            {{ c.poin || 0 }}
                                         </td>
                                         <td class="p-4 text-gray-600 italic">"{{ c.narasi }}"</td>
                                         <td class="p-4 text-center space-x-1">
@@ -702,7 +723,7 @@
                                         </td>
                                     </tr>
                                     <tr v-if="catatanTerfilter.length === 0">
-                                        <td colspan="4" class="p-6 text-center text-gray-400">Belum ada riwayat catatan observasi siswa pada filter kelas tersebut.</td>
+                                        <td colspan="6" class="p-6 text-center text-gray-400">Belum ada riwayat catatan poin siswa pada filter kelas tersebut.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -887,6 +908,46 @@
                         </div>
                     </div>
 
+                    <!-- Sinkronisasi Awan & Multi-Device (User Friendly UI) -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 lg:col-span-2">
+                        <div>
+                            <h3 class="text-sm font-bold text-[#b46b3f] uppercase tracking-widest mb-2 flex items-center">
+                                <i class="fa-solid fa-cloud mr-2"></i> Sinkronisasi Awan & Multi-Device
+                            </h3>
+                            <p class="text-xs text-gray-500 leading-relaxed">Hubungkan beberapa perangkat (HP, tablet, laptop) untuk menyinkronkan database secara otomatis dan real-time. Perubahan di satu perangkat akan langsung diterapkan ke perangkat lainnya.</p>
+                        </div>
+
+                        <div class="border border-gray-200 rounded-xl bg-slate-50/50 p-3 space-y-3">
+                            <!-- Status Panel -->
+                            <div class="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center shadow-sm">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-3 h-3 rounded-full" :class="isFirebaseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'"></div>
+                                    <div>
+                                        <div class="text-xs font-bold" :class="isFirebaseConnected ? 'text-emerald-500' : 'text-gray-500'">
+                                            {{ isFirebaseConnected ? 'Aktif & Sinkron (Terhubung)' : 'Menunggu Koneksi (Luring)' }}
+                                        </div>
+                                        <div class="text-[10px] text-gray-400 font-mono mt-0.5">ID Device: {{ deviceId }}</div>
+                                    </div>
+                                </div>
+                                <button v-if="isFirebaseConnected" @click="putuskanSinkronisasi" class="border border-red-200 text-red-500 hover:bg-red-50 px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition">PUTUSKAN</button>
+                            </div>
+
+                            <!-- Code Panel -->
+                            <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm text-center">
+                                <h4 class="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-4">Kode Akses Sinkronisasi Perangkat Anda</h4>
+                                <div class="flex justify-center items-center space-x-3 mb-4">
+                                    <div class="border border-amber-200 rounded-lg px-8 py-3 text-2xl font-black text-amber-500 tracking-widest bg-white shadow-sm">
+                                        {{ syncCode }}
+                                    </div>
+                                    <button @click="copySyncCode" class="border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600 p-3.5 rounded-lg transition shadow-sm" title="Salin Kode">
+                                        <i class="fa-regular fa-copy text-lg"></i>
+                                    </button>
+                                </div>
+                                <p class="text-[10px] text-gray-400">Masukkan kode ini di HP, tablet, atau laptop lain untuk menyinkronkan seluruh data KBM secara instan!</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Konektivitas Awan Multi-Device (Firebase API Credentials Hub) -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 lg:col-span-2">
                         <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-key mr-2 text-slate-500"></i>Konfigurasi Cloud Gateway Hub (Kredensial SDK Firebase)</h3>
@@ -920,6 +981,53 @@
                     </div>
                 </section>
 
+                <!-- ====== MODUL K: RULE FIREBASE CONSOLE ====== -->
+                <section v-if="currentMenu === 'rule-firebase'" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 animate-in fade-in duration-300">
+                    <div class="max-w-4xl mx-auto text-left">
+                        <div class="flex items-center mb-6">
+                            <div class="bg-amber-100 p-4 rounded-xl mr-5">
+                                <i class="fa-solid fa-shield-halved text-4xl text-amber-500"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-800 mb-1">Konfigurasi Rule Firebase</h3>
+                                <p class="text-gray-500 text-sm">Salin aturan keamanan (Security Rules) di bawah ini dan tempelkan pada tab <strong>Rules</strong> di Firestore Database konsol Firebase Anda. Ini wajib dilakukan agar sinkronisasi Cloud Hub berjalan tanpa terblokir sistem.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-slate-800 rounded-xl overflow-hidden shadow-lg border border-slate-700">
+                            <div class="bg-slate-900 px-5 py-3.5 flex justify-between items-center border-b border-slate-700">
+                                <span class="text-slate-400 text-xs font-mono font-bold"><i class="fa-solid fa-file-code mr-2"></i>firestore.rules</span>
+                                <button @click="copyFirebaseRules" class="text-xs bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded-lg transition shadow-sm flex items-center">
+                                    <i class="fa-regular fa-copy mr-2"></i> {{ copyRulesText }}
+                                </button>
+                            </div>
+                            <div class="p-6 overflow-x-auto bg-[#0d1117]">
+<pre class="text-emerald-400 font-mono text-sm leading-relaxed"><code>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Memastikan koneksi database EUNOIA aman
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}</code></pre>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 bg-blue-50 border border-blue-200 p-5 rounded-xl flex items-start space-x-3 shadow-sm">
+                            <i class="fa-solid fa-circle-info text-blue-500 text-lg mt-0.5"></i>
+                            <div class="text-sm text-blue-900 leading-relaxed">
+                                <strong class="text-base mb-2 block">Langkah Pemasangan:</strong>
+                                1. Buka <a href="https://console.firebase.google.com/" target="_blank" class="font-bold underline text-blue-700 hover:text-blue-500">Konsol Firebase</a> lalu pilih project Anda.<br>
+                                2. Masuk ke menu <strong>Firestore Database</strong> di bilah navigasi kiri.<br>
+                                3. Klik tab <strong>Rules</strong> (Aturan) yang berada di sebelah tab Data.<br>
+                                4. Hapus semua kode lama, lalu <em>Paste</em> (Tempel) kode yang telah disalin di atas.<br>
+                                5. Klik tombol <strong>Publish</strong> (Publikasikan).
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
             </div>
         </main>
 
@@ -929,13 +1037,23 @@
             <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
                 <h4 class="text-base font-bold text-gray-900 mb-4">Edit Data Siswa</h4>
                 <div class="space-y-3">
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase">NIS</label>
-                        <input type="text" v-model="modal.siswa.data.nis" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
+                    <div class="flex gap-4">
+                        <div class="w-1/2">
+                            <label class="block text-xs font-semibold text-gray-500 uppercase">NIS</label>
+                            <input type="text" v-model="modal.siswa.data.nis" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
+                        </div>
+                        <div class="w-1/2">
+                            <label class="block text-xs font-semibold text-gray-500 uppercase">NISN</label>
+                            <input type="text" v-model="modal.siswa.data.nisn" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
+                        </div>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase">Nama Lengkap</label>
                         <input type="text" v-model="modal.siswa.data.nama" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase">Tempat, Tanggal Lahir</label>
+                        <input type="text" v-model="modal.siswa.data.ttl" placeholder="Contoh: Jakarta, 1 Januari 2012" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
                     </div>
                 </div>
                 <div class="flex justify-end space-x-2 mt-6">
@@ -1017,41 +1135,112 @@
         </div>
 
         <!-- Modal Catatan Siswa -->
-        <div v-if="modal.catatan.show" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-                <h4 class="text-base font-bold text-gray-900 mb-4">Catatan Observasi Perilaku & Akademik</h4>
-                <div class="space-y-3">
+        <div v-if="modal.catatan.show" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <!-- Header Title -->
+                <div class="flex justify-between items-center p-4 border-b border-gray-100 shrink-0">
+                    <h4 class="text-base font-bold text-gray-900">{{ modal.catatan.isEdit ? 'Edit Kredit Point' : 'Tambah Kredit Point' }}</h4>
+                    <button @click="modal.catatan.show = false" class="text-gray-400 hover:text-gray-600 transition"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+                
+                <!-- Scrollable Form Content -->
+                <div class="overflow-y-auto p-5 space-y-5">
+                    <!-- Banner -->
+                    <div :class="modal.catatan.data.jenis === 'Kurang' ? 'from-red-500 to-rose-400' : 'from-blue-600 to-cyan-400'" class="bg-gradient-to-r rounded-xl p-4 text-center text-white shadow-md relative overflow-hidden transition-colors duration-300">
+                        <div class="absolute inset-0 bg-black/10"></div>
+                        <h5 class="font-bold text-lg mb-1 relative z-10"><i class="fa-solid mr-2" :class="modal.catatan.data.jenis === 'Kurang' ? 'fa-triangle-exclamation text-yellow-200' : 'fa-trophy text-yellow-300'"></i>{{ modal.catatan.data.jenis === 'Kurang' ? 'Sanksi Poin' : 'Tambah Kredit' }}</h5>
+                        <p class="text-xs opacity-90 relative z-10 font-medium">Catat {{ modal.catatan.data.jenis === 'Kurang' ? 'pelanggaran' : 'prestasi' }} siswa</p>
+                    </div>
+
+                    <!-- KELAS Grid Buttons -->
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase">Filter Kelas</label>
-                        <select v-model="modal.catatan.filterKelas" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none bg-white">
-                            <option value="" disabled>-- Pilih Kelas --</option>
-                            <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
+                        <label class="flex items-center text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2"><i class="fa-solid fa-graduation-cap mr-2 w-4"></i> Kelas</label>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button v-for="k in listRombel" :key="k" @click="modal.catatan.filterKelas = k; modal.catatan.data.siswaId = ''" 
+                                    :class="modal.catatan.filterKelas === k ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'"
+                                    class="border rounded-lg py-2.5 text-xs font-bold transition">
+                                {{ k }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- SISWA Select -->
+                    <div>
+                        <label class="flex items-center text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2"><i class="fa-solid fa-user mr-2 w-4"></i> Siswa</label>
+                        <select v-model="modal.catatan.data.siswaId" class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white font-medium text-gray-700">
+                            <option value="" disabled>Mulai pilih nama siswa...</option>
+                            <option v-for="s in datastore.siswa.filter(student => student.kelas === modal.catatan.filterKelas)" :value="s.id">{{ s.nama }}</option>
                         </select>
                     </div>
+
+                    <!-- JENIS Toggle -->
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase">Pilih Nama Siswa</label>
-                        <select v-model="modal.catatan.data.siswaId" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none bg-white">
-                            <option value="" disabled>-- Pilih Siswa --</option>
-                            <option v-for="s in datastore.siswa.filter(student => student.kelas === modal.catatan.filterKelas)" :value="s.id">
-                                {{ s.nama }}
-                            </option>
-                        </select>
+                        <label class="flex items-center text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2"><i class="fa-solid fa-bolt mr-2 w-4 text-yellow-500"></i> Jenis</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button @click="modal.catatan.data.jenis = 'Tambah'" 
+                                    :class="modal.catatan.data.jenis === 'Tambah' ? 'bg-emerald-100 border-emerald-400 text-emerald-800 ring-1 ring-emerald-400 shadow-sm' : 'bg-emerald-50/30 border-emerald-100 text-emerald-600 hover:bg-emerald-50'"
+                                    class="border rounded-xl py-4 flex flex-col items-center justify-center transition">
+                                <i class="fa-solid fa-plus text-2xl mb-1"></i>
+                                <span class="font-bold text-sm">Tambah</span>
+                            </button>
+                            <button @click="modal.catatan.data.jenis = 'Kurang'" 
+                                    :class="modal.catatan.data.jenis === 'Kurang' ? 'bg-red-100 border-red-400 text-red-800 ring-1 ring-red-400 shadow-sm' : 'bg-red-50/30 border-red-100 text-red-500 hover:bg-red-50'"
+                                    class="border rounded-xl py-4 flex flex-col items-center justify-center transition">
+                                <i class="fa-solid fa-minus text-2xl mb-1"></i>
+                                <span class="font-bold text-sm">Kurang</span>
+                            </button>
+                        </div>
                     </div>
+
+                    <!-- POIN Grid -->
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase">Klasifikasi Kategori</label>
-                        <select v-model="modal.catatan.data.tipe" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none bg-white">
-                            <option value="Akademis">Akademis (Nilai / Hambatan Belajar)</option>
-                            <option value="Perilaku">Perilaku (Sikap / Karakter / Profil Pancasila)</option>
-                        </select>
+                        <label class="flex items-center text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2"><i class="fa-solid fa-star mr-2 w-4 text-amber-500"></i> Poin</label>
+                        <div class="flex gap-2">
+                            <button v-for="n in 5" :key="n" @click="modal.catatan.data.poin = n"
+                                    :class="[modal.catatan.data.poin === n && modal.catatan.data.jenis === 'Tambah' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-500' : '',
+                                             modal.catatan.data.poin === n && modal.catatan.data.jenis === 'Kurang' ? 'border-red-500 bg-red-50 text-red-700 shadow-sm ring-1 ring-red-500' : '',
+                                             modal.catatan.data.poin !== n ? 'border-gray-200 text-gray-500 hover:bg-gray-50' : '']"
+                                    class="border rounded-lg flex-1 py-2.5 text-lg font-bold transition">
+                                {{ n }}
+                            </button>
+                        </div>
                     </div>
+
+                    <!-- TANGGAL Input -->
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase">Narasi Rekam Jejak Deskriptif</label>
-                        <textarea rows="4" v-model="modal.catatan.data.narasi" placeholder="Tulis rincian fakta lapangan..." class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none"></textarea>
+                        <label class="flex items-center text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2"><i class="fa-regular fa-calendar-days mr-2 w-4"></i> Tanggal</label>
+                        <div class="relative">
+                            <input type="date" v-model="modal.catatan.data.tanggal" class="w-full border border-gray-300 rounded-lg p-3 pl-10 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-gray-50/50 font-medium text-gray-700">
+                            <i class="fa-regular fa-calendar absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        </div>
+                    </div>
+
+                    <!-- CATATAN Textarea -->
+                    <div>
+                        <label class="flex items-center text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2"><i class="fa-solid fa-pen-to-square mr-2 w-4"></i> Catatan</label>
+                        <textarea v-model="modal.catatan.data.narasi" rows="2" placeholder="Tulis rincian prestasi atau pelanggaran..." class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-gray-700"></textarea>
                     </div>
                 </div>
-                <div class="flex justify-end space-x-2 mt-6">
-                    <button @click="modal.catatan.show = false" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-xs font-bold">Batal</button>
-                    <button @click="simpanCatatan()" class="bg-[#1e293b] hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition">Simpan Catatan</button>
+
+                <!-- Action Buttons -->
+                <div class="p-5 border-t border-gray-100 flex gap-3 bg-white shrink-0">
+                    <button @click="simpanCatatan()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl text-sm font-bold transition shadow-md">Simpan</button>
+                    <button @click="modal.catatan.show = false" class="flex-1 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 py-3.5 rounded-xl text-sm font-bold transition">Batal</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Konfirmasi Logout -->
+        <div v-if="showLogoutModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center animate-in zoom-in-95 duration-200">
+                <div class="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-solid fa-arrow-right-from-bracket text-2xl"></i>
+                </div>
+                <h4 class="text-lg font-bold text-gray-900 mb-2">Konfirmasi Keluar</h4>
+                <p class="text-sm text-gray-500 mb-6">Apakah Anda yakin ingin keluar dari sesi aplikasi EUNOIA saat ini?</p>
+                <div class="flex gap-3">
+                    <button @click="showLogoutModal = false" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition">Batal</button>
+                    <button @click="konfirmasiLogout" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition shadow-md">Ya, Keluar</button>
                 </div>
             </div>
         </div>
@@ -1241,7 +1430,8 @@
                 { id: 'olahan-nilai', name: 'Olahan Nilai', icon: 'fa-solid fa-chart-pie' },
                 { id: 'unduh-rekap', name: 'Unduh Rekap', icon: 'fa-solid fa-download' },
                 { id: 'portal-wali', name: 'Portal Wali Murid', icon: 'fa-regular fa-heart' },
-                { id: 'pengaturan', name: 'Pengaturan', icon: 'fa-solid fa-gear' }
+                { id: 'pengaturan', name: 'Pengaturan', icon: 'fa-solid fa-gear' },
+                { id: 'rule-firebase', name: 'Rule Firebase Console', icon: 'fa-solid fa-shield-halved' }
             ];
 
             // --- CONFIG KONFIGURASI GLOBAL ---
@@ -1291,6 +1481,8 @@
             const currentLicense = ref(localStorage.getItem('eunoia_active_license') || '');
             const isLoggedIn = ref(localStorage.getItem('eunoia_session') === 'active' && currentLicense.value !== '');
             const loginForm = ref({ license: localStorage.getItem('eunoia_last_license') || '', username: '', password: '', error: '' });
+            
+            const showLogoutModal = ref(false);
 
             const getDefaultSettings = () => ({
                 namaSekolah: 'SDN 1 Menteng',
@@ -1346,17 +1538,20 @@
             };
 
             const handleLogout = () => {
-                if (confirm('Apakah Anda yakin ingin keluar dari sesi aplikasi?')) {
-                    isLoggedIn.value = false;
-                    currentLicense.value = '';
-                    localStorage.removeItem('eunoia_session');
-                    localStorage.removeItem('eunoia_active_license');
-                    currentMenu.value = 'data-siswa'; 
-                    
-                    // Bersihkan memory virtual agar tidak mengintip data orang lain
-                    datastore.value = { siswa: [], presensi: {}, bab: [], nilai: [], ujian6: [], jurnal: [], catatan: [] };
-                    settings.value = getDefaultSettings();
-                }
+                showLogoutModal.value = true;
+            };
+
+            const konfirmasiLogout = () => {
+                isLoggedIn.value = false;
+                currentLicense.value = '';
+                localStorage.removeItem('eunoia_session');
+                localStorage.removeItem('eunoia_active_license');
+                currentMenu.value = 'data-siswa'; 
+                
+                // Bersihkan memory virtual agar tidak mengintip data orang lain
+                datastore.value = { siswa: [], presensi: {}, bab: [], nilai: [], ujian6: [], jurnal: [], catatan: [] };
+                settings.value = getDefaultSettings();
+                showLogoutModal.value = false;
             };
 
             const loadDataForLicense = (lic) => {
@@ -1380,15 +1575,15 @@
 
             const presensiViewMode = ref('harian');
 
-            const formSiswaCepat = ref({ nis: '', nama: '' });
+            const formSiswaCepat = ref({ nis: '', nisn: '', nama: '', ttl: '' });
             const formInput = ref({ newMapel: '', newKelas: '' });
 
             // --- MODAL WINDOW CONTROL ---
             const modal = ref({
-                siswa: { show: false, data: { id: null, nis: '', nama: '' } },
+                siswa: { show: false, data: { id: null, nis: '', nisn: '', nama: '', ttl: '' } },
                 bab: { show: false, isEdit: false, data: { id: null, nomor: null, nama: '', tp: '', kelas: '' } },
                 jurnal: { show: false, isEdit: false, data: { id: null, tanggal: '', kelas: '', materi: '', pencapaian: '', hambatan: '' } },
-                catatan: { show: false, isEdit: false, filterKelas: '', data: { id: null, siswaId: '', tipe: 'Akademis', narasi: '' } }
+                catatan: { show: false, isEdit: false, filterKelas: '', data: { id: null, siswaId: '', tanggal: '', jenis: 'Tambah', poin: 1, narasi: '' } }
             });
 
             // --- STATE & FUNGSI FIREBASE CLOUD HUB (BARU) ---
@@ -1397,6 +1592,41 @@
             const isFirebaseConnected = ref(false);
             const isSyncing = ref(false);
             const firebaseStatus = ref({ show: false, message: '', bgClass: '', iconClass: '' });
+
+            // Generate Device ID & Sync Code untuk UI Sinkronisasi
+            const generateDeviceId = () => Math.random().toString(36).substring(2, 10).toUpperCase() + '...';
+            const generateSyncCode = () => {
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                let code = '';
+                for(let i=0; i<7; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+                return code.substring(0,3) + '-' + code.substring(3);
+            };
+
+            const deviceId = ref(localStorage.getItem('eunoia_device_id') || generateDeviceId());
+            const syncCode = ref(localStorage.getItem('eunoia_sync_code') || generateSyncCode());
+
+            if (!localStorage.getItem('eunoia_device_id')) localStorage.setItem('eunoia_device_id', deviceId.value);
+            if (!localStorage.getItem('eunoia_sync_code')) localStorage.setItem('eunoia_sync_code', syncCode.value);
+
+            const putuskanSinkronisasi = () => {
+                if (confirm('Apakah Anda yakin ingin memutus koneksi sinkronisasi perangkat ini?')) {
+                    isFirebaseConnected.value = false;
+                    isSyncing.value = false;
+                    showFirebaseStatus('Koneksi sinkronisasi diputus. Aplikasi kembali ke mode penyimpanan luring.', 'info');
+                }
+            };
+
+            const copySyncCode = () => {
+                const textArea = document.createElement("textarea");
+                textArea.value = syncCode.value;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showFirebaseStatus('Kode sinkronisasi berhasil disalin ke papan klip!', 'success');
+                } catch (err) {}
+                document.body.removeChild(textArea);
+            };
 
             const showPrintPreview = ref(false);
 
@@ -1542,11 +1772,15 @@
                 datastore.value.siswa.push({
                     id: Date.now(),
                     nis: formSiswaCepat.value.nis,
+                    nisn: formSiswaCepat.value.nisn || '',
                     nama: formSiswaCepat.value.nama,
+                    ttl: formSiswaCepat.value.ttl || '',
                     kelas: filter.value.globalKelas
                 });
                 formSiswaCepat.value.nis = '';
+                formSiswaCepat.value.nisn = '';
                 formSiswaCepat.value.nama = '';
+                formSiswaCepat.value.ttl = '';
             };
 
             const hapusSiswa = (id) => {
@@ -1567,14 +1801,16 @@
                 const index = datastore.value.siswa.findIndex(s => s.id === modal.value.siswa.data.id);
                 if (index !== -1) {
                     datastore.value.siswa[index].nis = modal.value.siswa.data.nis;
+                    datastore.value.siswa[index].nisn = modal.value.siswa.data.nisn;
                     datastore.value.siswa[index].nama = modal.value.siswa.data.nama;
+                    datastore.value.siswa[index].ttl = modal.value.siswa.data.ttl;
                 }
                 modal.value.siswa.show = false;
             };
 
             const downloadTemplateSiswa = () => {
                 let wb = XLSX.utils.book_new();
-                let data = [{ 'NIS': '1011', 'Nama Lengkap': 'Contoh Siswa' }];
+                let data = [{ 'NIS': '1011', 'NISN': '0112233445', 'Nama Lengkap': 'Contoh Siswa', 'Tempat Tanggal Lahir': 'Jakarta, 1 Januari 2012' }];
                 let ws = XLSX.utils.json_to_sheet(data);
                 XLSX.utils.book_append_sheet(wb, ws, "Template_Siswa");
                 XLSX.writeFile(wb, `Template_Import_Siswa_Kelas_${filter.value.globalKelas}.xlsx`);
@@ -1596,8 +1832,10 @@
                             if (row['Nama Lengkap'] || row['Nama']) {
                                 datastore.value.siswa.push({
                                     id: Date.now() + Math.random(),
-                                    nis: (row['NIS'] || row['NISN'] || '').toString(),
+                                    nis: (row['NIS'] || '').toString(),
+                                    nisn: (row['NISN'] || '').toString(),
                                     nama: row['Nama Lengkap'] || row['Nama'] || '',
+                                    ttl: row['Tempat Tanggal Lahir'] || row['TTL'] || '',
                                     kelas: filter.value.globalKelas
                                 });
                                 importedCount++;
@@ -1621,8 +1859,10 @@
                             if (row.nama) {
                                 datastore.value.siswa.push({
                                     id: Date.now() + Math.random(),
-                                    nis: (row.nis || row.nisn || '').toString(),
+                                    nis: (row.nis || '').toString(),
+                                    nisn: (row.nisn || '').toString(),
                                     nama: row.nama,
+                                    ttl: row.ttl || '',
                                     kelas: filter.value.globalKelas
                                 });
                                 importedCount++;
@@ -1933,14 +2173,21 @@
             };
 
             const openModalCatatan = (catatan = null) => {
+                const today = new Date().toISOString().split('T')[0];
                 if (catatan) {
                     modal.value.catatan.isEdit = true;
-                    modal.value.catatan.data = { ...catatan };
+                    // Backward compatibility untuk data lama (tipe -> jenis, fallback poin 0, tanggal hari ini)
+                    modal.value.catatan.data = { 
+                        ...catatan,
+                        tanggal: catatan.tanggal || today,
+                        jenis: catatan.jenis || (catatan.tipe === 'Akademis' ? 'Tambah' : 'Kurang'),
+                        poin: catatan.poin || 1
+                    };
                     let student = datastore.value.siswa.find(s => s.id === catatan.siswaId);
                     modal.value.catatan.filterKelas = student ? student.kelas : '';
                 } else {
                     modal.value.catatan.isEdit = false;
-                    modal.value.catatan.data = { id: Date.now(), siswaId: '', tipe: 'Akademis', narasi: '' };
+                    modal.value.catatan.data = { id: Date.now(), siswaId: '', tanggal: today, jenis: 'Tambah', poin: 1, narasi: '' };
                     modal.value.catatan.filterKelas = filter.value.kelasCatatan !== 'Semua' ? filter.value.kelasCatatan : (listRombel.value[0] || '');
                 }
                 modal.value.catatan.show = true;
@@ -1948,7 +2195,10 @@
 
             const simpanCatatan = () => {
                 const d = modal.value.catatan.data;
-                if (!d.siswaId || !d.narasi) return alert('Mohon tentukan siswa dan teks narasi!');
+                if (!d.siswaId) return alert('Mohon pilih siswa terlebih dahulu!');
+                if (!d.tanggal) return alert('Tanggal tidak boleh kosong!');
+                if (!d.narasi) return alert('Catatan / narasi tidak boleh kosong!');
+                
                 if (modal.value.catatan.isEdit) {
                     const i = datastore.value.catatan.findIndex(c => c.id === d.id);
                     if (i !== -1) datastore.value.catatan[i] = d;
@@ -2103,9 +2353,15 @@
 
                 switch (modulName) {
                     case 'Data Siswa':
-                        headers = ['No', 'NIS/NISN', 'Nama Lengkap', 'Kelas'];
-                        keys = ['nis', 'nama', 'kelas'];
-                        rows = [...siswaTerfilterGlobal.value]; 
+                        headers = ['No', 'NIS', 'NISN', 'Nama Lengkap', 'Tempat, Tgl Lahir', 'Kelas'];
+                        keys = ['nis', 'nisn', 'nama', 'ttl', 'kelas'];
+                        rows = siswaTerfilterGlobal.value.map(s => ({
+                            nis: s.nis,
+                            nisn: s.nisn || '-',
+                            nama: s.nama,
+                            ttl: s.ttl || '-',
+                            kelas: s.kelas
+                        }));
                         break;
                     case 'Presensi':
                         headers = ['No', 'Nama Siswa', 'Kelas', 'Status Kehadiran'];
@@ -2171,10 +2427,14 @@
                         rows = [...jurnalTerfilter.value];
                         break;
                     case 'Catatan Siswa':
-                        headers = ['No', 'Nama Siswa', 'Kategori Tipe', 'Uraian Catatan'];
-                        keys = ['nama', 'tipe', 'narasi'];
+                        headers = ['No', 'Tanggal', 'Nama Siswa', 'Jenis', 'Poin', 'Uraian Catatan'];
+                        keys = ['tanggal', 'nama', 'jenis', 'poin', 'narasi'];
                         rows = catatanTerfilter.value.map(c => ({
-                            nama: getNamaSiswaById(c.siswaId), tipe: c.tipe, narasi: c.narasi
+                            tanggal: c.tanggal ? formatTanggalIndo(c.tanggal) : '-',
+                            nama: getNamaSiswaById(c.siswaId), 
+                            jenis: c.jenis || (c.tipe === 'Akademis' ? 'Tambah' : 'Kurang'), 
+                            poin: c.poin || 0,
+                            narasi: c.narasi
                         }));
                         break;
                 }
@@ -2196,7 +2456,7 @@
                         <html lang="id">
                         <head>
                             <meta charset="UTF-8">
-                            <title>\${printMeta.value.judul} - Kelas \${printMeta.value.fokusKelas}</title>
+                            <title>${printMeta.value.judul} - Kelas ${printMeta.value.fokusKelas}</title>
                             <script src="https://cdn.tailwindcss.com"><\/script>
                             <style>
                                 body {
@@ -2230,7 +2490,7 @@
                         </head>
                         <body>
                             <div class="max-w-4xl mx-auto">
-                                \${printContent}
+                                ${printContent}
                             </div>
                             <script>
                                 window.onload = function() {
@@ -2254,6 +2514,23 @@
                 return new Date(tglStr).toLocaleDateString('id-ID', opsi);
             };
 
+            const copyRulesText = ref('Salin Kode');
+            const copyFirebaseRules = () => {
+                const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    // Memastikan koneksi database EUNOIA aman\n    match /{document=**} {\n      allow read, write: if request.auth != null;\n    }\n  }\n}`;
+                const textArea = document.createElement("textarea");
+                textArea.value = rules;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    copyRulesText.value = 'Berhasil Disalin!';
+                    setTimeout(() => { copyRulesText.value = 'Salin Kode'; }, 2500);
+                } catch (err) {
+                    console.error('Gagal menyalin text', err);
+                }
+                document.body.removeChild(textArea);
+            };
+
             return {
                 currentMenu,
                 menus,
@@ -2273,6 +2550,8 @@
                 loginForm,
                 handleLogin,
                 handleLogout,
+                konfirmasiLogout,
+                showLogoutModal,
                 siswaTerfilterGlobal,
                 babTerfilter,
                 babTerfilterNilai,
@@ -2341,8 +2620,14 @@
                 ujiKoneksiFirebase,
                 hubungkanFirebase,
                 sinkronisasiAwan,
+                deviceId,
+                syncCode,
+                putuskanSinkronisasi,
+                copySyncCode,
                 showPrintPreview,
-                executeNativePrint
+                executeNativePrint,
+                copyRulesText,
+                copyFirebaseRules
             };
         }
     }).mount('#app');
