@@ -57,22 +57,26 @@
             
             <!-- Sisi Form Login (Kanan) -->
             <div class="md:w-7/12 p-10 py-16 flex flex-col justify-center bg-white">
-                <h2 class="text-2xl font-bold text-gray-800 mb-2">{{ authMode === 'login' ? 'Selamat Datang Kembali' : 'Buat Akun Baru' }}</h2>
-                <p class="text-sm text-gray-500 mb-6">{{ authMode === 'login' ? 'Silakan masukkan kredensial Anda untuk masuk ke aplikasi.' : 'Daftarkan diri Anda untuk mulai menggunakan aplikasi.' }}</p>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">
+                    {{ authMode === 'login' ? 'Selamat Datang Kembali' : (authMode === 'register' ? 'Buat Akun Baru' : (authMode === 'verify-register' ? 'Verifikasi Email' : (authMode === 'forgot-password' ? 'Lupa Kata Sandi' : 'Reset Kata Sandi'))) }}
+                </h2>
+                <p class="text-sm text-gray-500 mb-6">
+                    {{ authMode === 'login' ? 'Silakan masukkan kredensial Anda untuk masuk ke aplikasi.' : (authMode === 'register' ? 'Daftarkan diri Anda untuk mulai menggunakan aplikasi.' : (authMode === 'verify-register' ? 'Masukkan kode 6-digit yang dikirimkan ke email Anda.' : (authMode === 'forgot-password' ? 'Masukkan email terdaftar untuk menerima kode reset.' : 'Masukkan kode OTP dan kata sandi baru Anda.'))) }}
+                </p>
                 
-                <div class="bg-blue-50 text-blue-700 p-4 rounded-xl text-xs font-medium mb-6 border border-blue-100 leading-relaxed shadow-sm">
+                <div v-if="authMode === 'login' || authMode === 'register'" class="bg-blue-50 text-blue-700 p-4 rounded-xl text-xs font-medium mb-6 border border-blue-100 leading-relaxed shadow-sm">
                     <div class="flex items-start">
                         <i class="fa-solid fa-circle-info mt-1 mr-2 text-blue-500 text-base"></i>
                         <div>
                             <span v-if="authMode === 'login'" class="block mb-2 text-sm">
                                 Belum punya akun? 
-                                <a href="#" @click.prevent="authMode = 'register'; authForm.error = ''; authForm.success = ''" class="inline-block mt-2 sm:mt-0 sm:ml-2 bg-green-500 hover:bg-green-600 text-white font-bold py-1.5 px-4 rounded-lg no-underline transition-colors shadow-sm border border-green-600 active:scale-95">Daftar sekarang</a>
+                                <a href="#" @click.prevent="authMode = 'register'; authForm.error = ''; authForm.success = ''" class="inline-block mt-2 sm:mt-0 sm:ml-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-1.5 px-4 rounded-lg no-underline transition-colors shadow-sm border border-emerald-600 active:scale-95">Daftar sekarang</a>
                             </span>
                             <span v-else class="block mb-2 text-sm">
                                 Sudah punya akun? 
                                 <a href="#" @click.prevent="authMode = 'login'; authForm.error = ''; authForm.success = ''" class="inline-block mt-2 sm:mt-0 sm:ml-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-4 rounded-lg no-underline transition-colors shadow-sm border border-blue-700 active:scale-95">Masuk di sini</a>
                             </span>
-                            <span class="block opacity-90 mt-1.5">Setiap akun memiliki ruang database (workspace) yang dipisah ketat secara lokal dan dijamin tidak tertumpuk dengan akun lain.</span>
+                            <span class="block opacity-90 mt-1.5">Setiap akun memiliki ruang database (workspace) yang dipisah ketat secara lokal.</span>
                         </div>
                     </div>
                 </div>
@@ -85,31 +89,80 @@
                     <i class="fa-solid fa-circle-check mr-2 text-base"></i> {{ authForm.success }}
                 </div>
 
-                <form @submit.prevent="handleAuth" class="space-y-5">
-                    <div v-if="authMode === 'register'">
-                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Nama Lengkap</label>
-                        <div class="relative">
-                            <i class="fa-solid fa-id-card absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="text" v-model="authForm.nama" placeholder="Masukkan nama lengkap Anda" :required="authMode === 'register'" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                <!-- FORM UTAMA -->
+                <form @submit.prevent="authMode === 'verify-register' ? verifyRegister() : (authMode === 'forgot-password' ? requestForgotPassword() : (authMode === 'reset-password' ? processResetPassword() : handleAuth()))" class="space-y-5">
+                    
+                    <!-- INPUT KELOMPOK LOGIN & REGISTER -->
+                    <template v-if="authMode === 'login' || authMode === 'register'">
+                        <div v-if="authMode === 'register'">
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Nama Lengkap</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-id-card absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="text" v-model="authForm.nama" placeholder="Masukkan nama lengkap" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Username / ID Pengguna</label>
-                        <div class="relative">
-                            <i class="fa-solid fa-user absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="text" v-model="authForm.username" placeholder="Masukkan username" required class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                        <div v-if="authMode === 'register'">
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Alamat Email</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="email" v-model="authForm.email" placeholder="email@contoh.com" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">PIN / Password Keamanan</label>
-                        <div class="relative">
-                            <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="password" v-model="authForm.password" placeholder="••••••••" required class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Username / ID Pengguna</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-user absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="text" v-model="authForm.username" placeholder="Masukkan username" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                            </div>
                         </div>
-                    </div>
+                        <div>
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide">PIN / Password</label>
+                                <a v-if="authMode === 'login'" href="#" @click.prevent="authMode = 'forgot-password'; authForm.error = ''; authForm.success = ''" class="text-xs font-bold text-blue-600 hover:text-blue-800 transition">Lupa Sandi?</a>
+                            </div>
+                            <div class="relative">
+                                <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="password" v-model="authForm.password" placeholder="••••••••" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- INPUT LUPA SANDI -->
+                    <template v-if="authMode === 'forgot-password'">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Alamat Email Terdaftar</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="email" v-model="authForm.email" placeholder="Masukkan email akun Anda" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                            </div>
+                        </div>
+                        <a href="#" @click.prevent="authMode = 'login'; authForm.error = ''; authForm.success = ''" class="block text-xs text-center text-gray-500 hover:text-gray-800 font-bold mt-2"><i class="fa-solid fa-arrow-left mr-1"></i> Kembali ke Login</a>
+                    </template>
+
+                    <!-- INPUT VERIFIKASI OTP -->
+                    <template v-if="authMode === 'verify-register' || authMode === 'reset-password'">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Kode Verifikasi (OTP)</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-key absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="text" v-model="authForm.verificationCode" placeholder="Masukkan 6 digit angka" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm text-center font-bold tracking-widest">
+                            </div>
+                        </div>
+                        
+                        <div v-if="authMode === 'reset-password'">
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 mt-4">Kata Sandi Baru</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="password" v-model="authForm.password" placeholder="Buat sandi baru (min 5 karakter)" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                            </div>
+                        </div>
+
+                        <a href="#" @click.prevent="authMode = 'login'; authForm.error = ''; authForm.success = ''" class="block text-xs text-center text-gray-500 hover:text-gray-800 font-bold mt-2">Batal & Kembali</a>
+                    </template>
+
                     <button type="submit" class="w-full bg-[#1e293b] hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition shadow-lg hover:shadow-xl mt-4 flex items-center justify-center transform active:scale-[0.98]">
-                        {{ authMode === 'login' ? 'Masuk Aplikasi' : 'Daftar Akun' }} 
-                        <i class="fa-solid" :class="authMode === 'login' ? 'fa-arrow-right-to-bracket ml-2' : 'fa-user-plus ml-2'"></i>
+                        {{ authMode === 'login' ? 'Masuk Aplikasi' : (authMode === 'register' ? 'Daftar & Lanjutkan' : (authMode === 'forgot-password' ? 'Kirim Kode OTP' : 'Verifikasi & Simpan')) }} 
+                        <i class="fa-solid" :class="authMode === 'login' ? 'fa-arrow-right-to-bracket ml-2' : (authMode === 'register' ? 'fa-user-plus ml-2' : 'fa-check ml-2')"></i>
                     </button>
                 </form>
                 <div class="mt-8 pt-6 border-t border-gray-100 text-center">
@@ -856,36 +909,26 @@
                         </div>
                     </div>
 
-                    <!-- Backup & Sinkronisasi Eksternal -->
+                    <!-- Pengaturan Ganti Kata Sandi -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                        <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-cloud-arrow-up mr-2 text-slate-500"></i>Backup Local & Google Spreadsheet (Akses Orang Tua)</h3>
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-500 uppercase">Google Spreadsheet Webhook URL</label>
-                            <input type="url" v-model="settings.parentSpreadsheetUrl" placeholder="https://script.google.com/macros/s/.../exec" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
-                            <p class="text-[10px] text-gray-400 mt-1">Berfungsi mengekspor data kompilasi secara realtime agar dapat dipetakan ke Spreadsheet eksternal wali murid.</p>
-                        </div>
-                        <div class="flex gap-2 pt-2">
-                            <button @click="downloadBackupJSON()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold p-2.5 rounded-xl transition shadow-sm"><i class="fa-solid fa-download mr-2"></i>Download JSON</button>
-                            <label class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold p-2.5 rounded-xl transition text-center cursor-pointer shadow-sm border border-gray-200">
-                                <i class="fa-solid fa-upload mr-2"></i>Restore JSON
-                                <input type="file" @change="uploadRestoreJSON" class="hidden" accept=".json">
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Kredensial Keamanan Akses -->
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                        <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-lock mr-2 text-slate-500"></i>Kredensial Keamanan Akses</h3>
+                        <h3 class="text-base font-bold text-gray-800 border-b border-gray-100 pb-3"><i class="fa-solid fa-shield-halved mr-2 text-slate-500"></i>Pengaturan Kata Sandi</h3>
                         <div class="space-y-3">
                             <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase">Username Aplikasi</label>
-                                <input type="text" v-model="settings.username" placeholder="Masukkan username baru" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                <label class="block text-xs font-semibold text-gray-500 uppercase">Sandi Saat Ini</label>
+                                <input type="password" v-model="formGantiSandi.lama" placeholder="Masukkan sandi saat ini" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 focus:bg-white">
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase">PIN / Password Utama</label>
-                                <input type="text" v-model="settings.password" placeholder="Masukkan PIN / Password baru" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                <label class="block text-xs font-semibold text-gray-500 uppercase">Sandi Baru</label>
+                                <input type="password" v-model="formGantiSandi.baru" placeholder="Masukkan sandi baru" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 focus:bg-white">
                             </div>
-                            <p class="text-[10px] text-gray-400 leading-tight">Data login ini disimpan secara lokal di perangkat Anda. Karena tidak menggunakan database eksternal, mohon ingat baik-baik username dan PIN Anda agar tidak terkunci.</p>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase">Konfirmasi Sandi Baru</label>
+                                <input type="password" v-model="formGantiSandi.konfirmasi" placeholder="Ulangi sandi baru" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 focus:bg-white">
+                            </div>
+                            <div class="pt-2">
+                                <button @click="prosesGantiSandi()" class="bg-[#1e293b] hover:bg-slate-800 text-white font-bold text-xs px-5 py-2.5 rounded-lg transition shadow-sm"><i class="fa-solid fa-floppy-disk mr-2"></i>Simpan Sandi Baru</button>
+                            </div>
+                            <p class="text-[10px] text-gray-400 leading-tight mt-2">Pembaruan kata sandi akan disinkronkan secara aman untuk login sesi Anda selanjutnya. Mohon ingat baik-baik perubahan ini.</p>
                         </div>
                     </div>
 
@@ -1498,7 +1541,12 @@ service cloud.firestore {
             const authMode = ref('login');
             const currentUser = ref(localStorage.getItem('eunoia_active_user') || '');
             const isLoggedIn = ref(localStorage.getItem('eunoia_session') === 'active' && currentUser.value !== '');
-            const authForm = ref({ username: localStorage.getItem('eunoia_last_user') || '', password: '', nama: '', error: '', success: '' });
+            const authForm = ref({ username: localStorage.getItem('eunoia_last_user') || '', password: '', nama: '', email: '', verificationCode: '', error: '', success: '' });
+            
+            const tempOtp = ref('');
+            const tempUserData = ref(null);
+            
+            const formGantiSandi = ref({ lama: '', baru: '', konfirmasi: '' });
             
             const showLogoutModal = ref(false);
 
@@ -1529,45 +1577,21 @@ service cloud.firestore {
             const handleAuth = () => {
                 authForm.value.error = '';
                 authForm.value.success = '';
-                const user = authForm.value.username.trim();
-                const pass = authForm.value.password;
-
-                if(!user || !pass) {
-                    authForm.value.error = 'Username dan Password wajib diisi!';
-                    return;
-                }
-
-                let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
-
-                if (authMode.value === 'register') {
-                    if (usersDb[user]) {
-                        authForm.value.error = 'Username sudah terdaftar. Silakan gunakan username lain.';
+                
+                if (authMode.value === 'login') {
+                    const user = authForm.value.username.trim();
+                    const pass = authForm.value.password;
+                    if(!user || !pass) {
+                        authForm.value.error = 'Username dan Password wajib diisi!';
                         return;
                     }
-                    usersDb[user] = {
-                        password: pass,
-                        nama: authForm.value.nama || user,
-                        createdAt: new Date().toISOString()
-                    };
-                    localStorage.setItem('eunoia_users_db', JSON.stringify(usersDb));
 
-                    // Setup pengaturan default untuk akun baru
-                    const defaultSet = getDefaultSettings();
-                    defaultSet.namaGuru = authForm.value.nama || user;
-                    defaultSet.username = user;
-                    defaultSet.password = pass;
-                    localStorage.setItem(`eunoia_settings_${user}`, JSON.stringify(defaultSet));
-
-                    authForm.value.success = 'Pendaftaran berhasil! Silakan masuk menggunakan akun tersebut.';
-                    authMode.value = 'login';
-                    authForm.value.password = '';
-                } else {
-                    // Verifikasi login mode
+                    let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
                     let validPass = '12345';
                     if (usersDb[user]) {
                         validPass = usersDb[user].password;
                     } else if (user === 'eunoia' && pass === '12345') {
-                        // Fallback default akun (untuk demo pertama kali jika blm didaftarkan)
+                        // Fallback default akun
                     } else {
                         authForm.value.error = 'Username atau Password salah atau belum terdaftar!';
                         return;
@@ -1587,7 +1611,178 @@ service cloud.firestore {
                     authForm.value.password = ''; 
                     
                     loadDataForUser(user);
+                } else if (authMode.value === 'register') {
+                    const user = authForm.value.username.trim();
+                    const pass = authForm.value.password;
+                    const email = authForm.value.email.trim();
+                    const nama = authForm.value.nama.trim();
+
+                    if(!user || !pass || !email || !nama) {
+                        authForm.value.error = 'Semua field (Nama, Email, Username, Password) wajib diisi!';
+                        return;
+                    }
+
+                    let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
+                    if (usersDb[user]) {
+                        authForm.value.error = 'Username sudah terdaftar. Silakan gunakan username lain.';
+                        return;
+                    }
+                    
+                    // Cek email duplicate
+                    for (const key in usersDb) {
+                        if (usersDb[key].email === email) {
+                            authForm.value.error = 'Email sudah terdaftar. Silakan gunakan email lain atau gunakan fitur Lupa Sandi.';
+                            return;
+                        }
+                    }
+
+                    // Simulasi Kirim OTP
+                    tempOtp.value = Math.floor(100000 + Math.random() * 900000).toString();
+                    tempUserData.value = { user, pass, email, nama };
+                    authMode.value = 'verify-register';
+                    authForm.value.verificationCode = '';
+                    
+                    alert(`[SIMULASI SISTEM EMAIL]\n\nKode verifikasi pendaftaran Anda telah dikirim ke email ${email}.\n\nKODE OTP ANDA: ${tempOtp.value}\n\n(Catatan: Karena aplikasi berbasis front-end tanpa server, kode ditampilkan via peringatan ini)`);
+                    authForm.value.success = `Kode OTP telah dikirim ke email ${email}.`;
                 }
+            };
+            
+            const verifyRegister = () => {
+                authForm.value.error = '';
+                authForm.value.success = '';
+                if (authForm.value.verificationCode !== tempOtp.value) {
+                    authForm.value.error = 'Kode OTP tidak valid atau salah!';
+                    return;
+                }
+                
+                let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
+                let data = tempUserData.value;
+                
+                usersDb[data.user] = {
+                    password: data.pass,
+                    nama: data.nama || data.user,
+                    email: data.email,
+                    createdAt: new Date().toISOString()
+                };
+                localStorage.setItem('eunoia_users_db', JSON.stringify(usersDb));
+
+                const defaultSet = getDefaultSettings();
+                defaultSet.namaGuru = data.nama || data.user;
+                defaultSet.username = data.user;
+                defaultSet.password = data.pass;
+                localStorage.setItem(`eunoia_settings_${data.user}`, JSON.stringify(defaultSet));
+
+                authForm.value.success = 'Verifikasi dan Pendaftaran berhasil! Silakan masuk.';
+                authMode.value = 'login';
+                authForm.value.password = '';
+                tempOtp.value = '';
+                tempUserData.value = null;
+            };
+
+            const requestForgotPassword = () => {
+                authForm.value.error = '';
+                authForm.value.success = '';
+                const email = authForm.value.email.trim();
+                
+                if (!email) {
+                    authForm.value.error = 'Masukkan email yang terdaftar!';
+                    return;
+                }
+                
+                let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
+                let foundUser = null;
+                
+                for (const key in usersDb) {
+                    if (usersDb[key].email === email) {
+                        foundUser = key;
+                        break;
+                    }
+                }
+                
+                if (!foundUser) {
+                    authForm.value.error = 'Email tidak ditemukan dalam sistem kami.';
+                    return;
+                }
+                
+                tempUserData.value = { user: foundUser };
+                tempOtp.value = Math.floor(100000 + Math.random() * 900000).toString();
+                authMode.value = 'reset-password';
+                authForm.value.verificationCode = '';
+                authForm.value.password = ''; // using this as new password field
+                
+                alert(`[SIMULASI SISTEM EMAIL]\n\nKode reset kata sandi telah dikirim ke email ${email}.\n\nKODE OTP ANDA: ${tempOtp.value}`);
+                authForm.value.success = `Kode OTP untuk reset sandi telah dikirim ke email ${email}.`;
+            };
+            
+            const processResetPassword = () => {
+                authForm.value.error = '';
+                authForm.value.success = '';
+                if (authForm.value.verificationCode !== tempOtp.value) {
+                    authForm.value.error = 'Kode OTP tidak valid!';
+                    return;
+                }
+                
+                if (!authForm.value.password || authForm.value.password.length < 5) {
+                    authForm.value.error = 'Sandi baru wajib diisi minimal 5 karakter!';
+                    return;
+                }
+                
+                let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
+                let usernameToReset = tempUserData.value.user;
+                
+                usersDb[usernameToReset].password = authForm.value.password;
+                localStorage.setItem('eunoia_users_db', JSON.stringify(usersDb));
+                
+                // Update local settings too if exists
+                let localSetStr = localStorage.getItem(`eunoia_settings_${usernameToReset}`);
+                if (localSetStr) {
+                    let localSet = JSON.parse(localSetStr);
+                    localSet.password = authForm.value.password;
+                    localStorage.setItem(`eunoia_settings_${usernameToReset}`, JSON.stringify(localSet));
+                }
+                
+                authForm.value.success = 'Kata sandi berhasil diatur ulang! Silakan masuk.';
+                authMode.value = 'login';
+                authForm.value.password = '';
+                tempOtp.value = '';
+                tempUserData.value = null;
+            };
+
+            const prosesGantiSandi = () => {
+                firebaseStatus.value = {show:false}; // reset notification if any
+                if (!formGantiSandi.value.lama || !formGantiSandi.value.baru || !formGantiSandi.value.konfirmasi) {
+                    return showFirebaseStatus('Semua kolom sandi wajib diisi!', 'error');
+                }
+                
+                if (formGantiSandi.value.baru !== formGantiSandi.value.konfirmasi) {
+                    return showFirebaseStatus('Konfirmasi sandi baru tidak cocok!', 'error');
+                }
+                
+                let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
+                let activeDb = usersDb[currentUser.value];
+                
+                if (!activeDb) {
+                    // Fallback create data for hardcoded 'eunoia' admin if they try to change it for the first time
+                    if (currentUser.value === 'eunoia') {
+                        activeDb = { password: '12345', nama: 'Eunoia Admin', email: '' };
+                        usersDb['eunoia'] = activeDb;
+                    } else {
+                        return showFirebaseStatus('Gagal menemukan data pengguna.', 'error');
+                    }
+                }
+                
+                if (activeDb.password !== formGantiSandi.value.lama) {
+                    return showFirebaseStatus('Sandi lama yang Anda masukkan salah!', 'error');
+                }
+                
+                activeDb.password = formGantiSandi.value.baru;
+                localStorage.setItem('eunoia_users_db', JSON.stringify(usersDb));
+                
+                settings.value.password = formGantiSandi.value.baru; 
+                saveToLocal();
+                
+                formGantiSandi.value = { lama: '', baru: '', konfirmasi: '' };
+                showFirebaseStatus('Kata sandi berhasil diperbarui!', 'success');
             };
 
             const handleLogout = () => {
@@ -2651,6 +2846,11 @@ service cloud.firestore {
                 authMode,
                 authForm,
                 handleAuth,
+                verifyRegister,
+                requestForgotPassword,
+                processResetPassword,
+                formGantiSandi,
+                prosesGantiSandi,
                 handleLogout,
                 konfirmasiLogout,
                 showLogoutModal,
