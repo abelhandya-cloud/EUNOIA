@@ -57,45 +57,59 @@
             
             <!-- Sisi Form Login (Kanan) -->
             <div class="md:w-7/12 p-10 py-16 flex flex-col justify-center bg-white">
-                <h2 class="text-2xl font-bold text-gray-800 mb-2">Selamat Datang Kembali</h2>
-                <p class="text-sm text-gray-500 mb-6">Silakan masukkan kredensial Anda untuk membuka kunci aplikasi.</p>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">{{ authMode === 'login' ? 'Selamat Datang Kembali' : 'Buat Akun Baru' }}</h2>
+                <p class="text-sm text-gray-500 mb-6">{{ authMode === 'login' ? 'Silakan masukkan kredensial Anda untuk masuk ke aplikasi.' : 'Daftarkan diri Anda untuk mulai menggunakan aplikasi.' }}</p>
                 
-                <div class="bg-blue-50 text-blue-700 p-3.5 rounded-xl text-xs font-medium mb-6 border border-blue-100 leading-relaxed shadow-sm">
-                    <i class="fa-solid fa-circle-info mr-1.5 text-blue-500"></i>
-                    <strong>Kode Lisensi :</strong> (Diberikan oleh Penjual Aplikasi)<br>
-                    <strong>Username :</strong> eunoia <span class="mx-1">|</span> <strong>Pin :</strong> 12345<br>
-                    <span class="mt-1 block opacity-90">Setiap Kode Lisensi memiliki ruang database (workspace) yang dipisah ketat secara lokal dan dijamin tidak tertumpuk. Setelah Anda login, silakan ubah username dan sandi pada menu Pengaturan.</span>
+                <div class="bg-blue-50 text-blue-700 p-4 rounded-xl text-xs font-medium mb-6 border border-blue-100 leading-relaxed shadow-sm">
+                    <div class="flex items-start">
+                        <i class="fa-solid fa-circle-info mt-1 mr-2 text-blue-500 text-base"></i>
+                        <div>
+                            <span v-if="authMode === 'login'" class="block mb-2 text-sm">
+                                Belum punya akun? 
+                                <a href="#" @click.prevent="authMode = 'register'; authForm.error = ''; authForm.success = ''" class="inline-block mt-2 sm:mt-0 sm:ml-2 bg-green-500 hover:bg-green-600 text-white font-bold py-1.5 px-4 rounded-lg no-underline transition-colors shadow-sm border border-green-600 active:scale-95">Daftar sekarang</a>
+                            </span>
+                            <span v-else class="block mb-2 text-sm">
+                                Sudah punya akun? 
+                                <a href="#" @click.prevent="authMode = 'login'; authForm.error = ''; authForm.success = ''" class="inline-block mt-2 sm:mt-0 sm:ml-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-4 rounded-lg no-underline transition-colors shadow-sm border border-blue-700 active:scale-95">Masuk di sini</a>
+                            </span>
+                            <span class="block opacity-90 mt-1.5">Setiap akun memiliki ruang database (workspace) yang dipisah ketat secara lokal dan dijamin tidak tertumpuk dengan akun lain.</span>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Peringatan Error -->
-                <div v-if="loginForm.error" class="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold mb-5 flex items-center border border-red-100">
-                    <i class="fa-solid fa-triangle-exclamation mr-2 text-base"></i> {{ loginForm.error }}
+                <!-- Peringatan Error & Success -->
+                <div v-if="authForm.error" class="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold mb-5 flex items-center border border-red-100">
+                    <i class="fa-solid fa-triangle-exclamation mr-2 text-base"></i> {{ authForm.error }}
+                </div>
+                <div v-if="authForm.success" class="bg-emerald-50 text-emerald-600 p-3 rounded-xl text-xs font-bold mb-5 flex items-center border border-emerald-100">
+                    <i class="fa-solid fa-circle-check mr-2 text-base"></i> {{ authForm.success }}
                 </div>
 
-                <form @submit.prevent="handleLogin" class="space-y-5">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Kode Lisensi / ID Instansi</label>
+                <form @submit.prevent="handleAuth" class="space-y-5">
+                    <div v-if="authMode === 'register'">
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Nama Lengkap</label>
                         <div class="relative">
-                            <i class="fa-solid fa-key absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="text" v-model="loginForm.license" placeholder="Masukkan kode lisensi unik Anda" required class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm font-mono uppercase">
+                            <i class="fa-solid fa-id-card absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" v-model="authForm.nama" placeholder="Masukkan nama lengkap Anda" :required="authMode === 'register'" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
                         </div>
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Username / ID Pengguna</label>
                         <div class="relative">
                             <i class="fa-solid fa-user absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="text" v-model="loginForm.username" placeholder="Masukkan username" required class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                            <input type="text" v-model="authForm.username" placeholder="Masukkan username" required class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
                         </div>
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">PIN / Password Keamanan</label>
                         <div class="relative">
                             <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="password" v-model="loginForm.password" placeholder="••••••••" required class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                            <input type="password" v-model="authForm.password" placeholder="••••••••" required class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
                         </div>
                     </div>
                     <button type="submit" class="w-full bg-[#1e293b] hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition shadow-lg hover:shadow-xl mt-4 flex items-center justify-center transform active:scale-[0.98]">
-                        Masuk Aplikasi <i class="fa-solid fa-arrow-right-to-bracket ml-2"></i>
+                        {{ authMode === 'login' ? 'Masuk Aplikasi' : 'Daftar Akun' }} 
+                        <i class="fa-solid" :class="authMode === 'login' ? 'fa-arrow-right-to-bracket ml-2' : 'fa-user-plus ml-2'"></i>
                     </button>
                 </form>
                 <div class="mt-8 pt-6 border-t border-gray-100 text-center">
@@ -129,7 +143,7 @@
                         <span>{{ menu.name }}</span>
                     </button>
                     
-                    <!-- Tombol Logout Pindahan -->
+                    <!-- Tombol Logout -->
                     <div class="pt-2 mt-2 border-t border-black/10">
                         <button @click="handleLogout" 
                                 :class="sidebarTextColor"
@@ -288,13 +302,6 @@
                                     <label class="block text-xs font-semibold text-gray-500 uppercase">Tanggal Presensi</label>
                                     <input type="date" v-model="filter.tanggalPresensi" class="mt-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none">
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase">Filter Kelas</label>
-                                    <select v-model="filter.kelasPresensi" class="mt-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none">
-                                        <option value="Semua">Semua Kelas</option>
-                                        <option v-for="k in listRombel" :value="k">{{ k }}</option>
-                                    </select>
-                                </div>
                             </div>
                         </div>
                         <div class="space-x-2 self-end">
@@ -381,13 +388,7 @@
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <div>
                             <h3 class="text-lg font-bold text-gray-800">Manajemen Bab & Tujuan Pembelajaran (TP)</h3>
-                            <p class="text-xs text-gray-400 mt-0.5 mb-3">Atur capaian kurikulum per mata pelajaran sebelum menginput nilai.</p>
-                            <div class="flex items-center gap-3">
-                                <label class="text-sm font-semibold text-gray-600">Filter Kelas:</label>
-                                <select v-model="filter.kelasBab" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none bg-white font-bold text-gray-700 cursor-pointer">
-                                    <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
-                                </select>
-                            </div>
+                            <p class="text-xs text-gray-400 mt-0.5 mb-3">Atur capaian kurikulum per mata pelajaran sebelum menginput nilai. <span class="font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded ml-1">Mapel Aktif: {{ settings.mapelAktif }}</span></p>
                         </div>
                         <button @click="openModalBab()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Tambah Bab / TP</button>
                     </div>
@@ -403,22 +404,30 @@
                                     <th class="p-4 text-right w-32">Aksi</th>
                                 </tr>
                             </thead>
+                            <!-- PERUBAHAN: Modifikasi tbody untuk logika grouping visual bab -->
                             <tbody class="divide-y divide-gray-100 bg-white">
-                                <tr v-for="(b, idx) in babTerfilter" :key="b.id" class="hover:bg-gray-50/50 transition">
-                                    <td class="p-4 text-center text-gray-500 font-medium">{{ idx + 1 }}</td>
-                                    <td class="p-4">
-                                        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">Bab {{ b.nomor }}</span>
+                                <tr v-for="(b, idx) in babTerfilterSorted" :key="b.id" class="hover:bg-gray-50/50 transition">
+                                    <td class="p-4 text-center text-gray-500 font-medium">
+                                        <!-- Cek apakah nomor bab ini berbeda dengan baris sebelumnya -->
+                                        <span v-if="idx === 0 || b.nomor !== babTerfilterSorted[idx - 1].nomor">{{ b.nomor }}</span>
                                     </td>
-                                    <td class="p-4 font-bold text-gray-800">{{ b.nama }}</td>
+                                    <td class="p-4">
+                                        <!-- Hanya tampilkan label 'Bab' jika ini adalah baris pertama untuk bab tersebut -->
+                                        <span v-if="idx === 0 || b.nomor !== babTerfilterSorted[idx - 1].nomor" class="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">Bab {{ b.nomor }}</span>
+                                    </td>
+                                    <td class="p-4 font-bold text-gray-800">
+                                        <!-- Tampilkan nama bab hanya sekali -->
+                                        <span v-if="idx === 0 || b.nomor !== babTerfilterSorted[idx - 1].nomor">{{ b.nama }}</span>
+                                    </td>
                                     <td class="p-4 text-gray-600 whitespace-pre-line">{{ b.tp }}</td>
                                     <td class="p-4 text-right space-x-1">
                                         <button @click="openModalBab(b)" class="text-blue-600 font-bold text-xs hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded transition">Edit</button>
                                         <button @click="hapusBab(b.id)" class="text-red-600 font-bold text-xs hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded transition">Hapus</button>
                                     </td>
                                 </tr>
-                                <tr v-if="babTerfilter.length === 0">
+                                <tr v-if="babTerfilterSorted.length === 0">
                                     <td colspan="5" class="p-8 text-center text-gray-400 border-t border-dashed border-gray-200">
-                                        Belum ada matriks Bab dan TP yang dibuat untuk Kelas {{ filter.kelasBab }}.
+                                        Belum ada matriks Bab dan TP yang dibuat untuk Kelas {{ filter.globalKelas }} pada Mata Pelajaran {{ settings.mapelAktif }}.
                                     </td>
                                 </tr>
                             </tbody>
@@ -432,10 +441,6 @@
                         <div>
                             <h3 class="text-lg font-bold text-gray-800">Penginputan Evaluasi Belajar</h3>
                             <div class="flex flex-wrap gap-3 mt-2">
-                                <select v-model="filter.kelasNilai" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none bg-white font-semibold text-gray-700">
-                                    <option value="" disabled>-- Pilih Kelas --</option>
-                                    <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
-                                </select>
                                 <select v-model="filter.babNilai" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none bg-white font-semibold text-gray-700">
                                     <option value="" disabled>-- Pilih Acuan Bab --</option>
                                     <option v-for="b in babTerfilterNilai" :value="b.id">Bab {{ b.nomor }}: {{ b.nama }}</option>
@@ -452,7 +457,7 @@
                     <!-- Panel Import Nilai -->
                     <div v-if="showImportNilai" class="bg-indigo-50 border border-indigo-100 p-5 rounded-xl mb-6 shadow-inner">
                         <h4 class="font-bold text-indigo-800 mb-3 text-sm flex items-center"><i class="fa-solid fa-cloud-arrow-down mr-2"></i>Import Massal Nilai Siswa</h4>
-                        <p class="text-xs text-indigo-600 mb-4 font-semibold">Pilih filter <span class="bg-indigo-100 px-1 rounded">Kelas</span> dan <span class="bg-indigo-100 px-1 rounded">Acuan Bab</span> terlebih dahulu sebelum melakukan Import/Download Template.</p>
+                        <p class="text-xs text-indigo-600 mb-4 font-semibold">Pastikan <span class="bg-indigo-100 px-1 rounded">Acuan Bab</span> sudah dipilih terlebih dahulu sebelum melakukan Import/Download Template.</p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <!-- Excel Import -->
                             <div class="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm">
@@ -470,8 +475,8 @@
                         </div>
                     </div>
 
-                    <div v-if="!filter.kelasNilai || !filter.babNilai" class="p-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl bg-white">
-                        <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300 block"></i> Harap pilih filter Kelas dan buat/pilih Acuan Bab terlebih dahulu untuk memunculkan lembar penilaian.
+                    <div v-if="!filter.babNilai" class="p-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl bg-white">
+                        <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300 block"></i> Harap buat dan pilih Acuan Bab terlebih dahulu untuk memunculkan lembar penilaian.
                     </div>
 
                     <div v-else class="overflow-x-auto rounded-xl border border-gray-200">
@@ -542,13 +547,6 @@
                     <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-4 mb-6 pb-6 border-b border-gray-100">
                         <div>
                             <h3 class="text-lg font-bold text-gray-800">Sistem Pengolahan Kriteria Nilai Akhir</h3>
-                            <div class="flex items-center gap-3 mt-3">
-                                <label class="text-sm font-semibold text-gray-600">Filter Kelas Output:</label>
-                                <select v-model="filter.kelasOlahan" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none bg-white">
-                                    <option value="" disabled>-- Pilih Kelas --</option>
-                                    <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
-                                </select>
-                            </div>
                         </div>
                         
                         <!-- EDIT BOBOT NILAI -->
@@ -583,11 +581,7 @@
                         <span><strong>Perhatian:</strong> Akumulasi persentase bobot komparasi saat ini adalah <strong>{{ totalBobot }}%</strong>. Pastikan total bobot bernilai genap <strong>100%</strong> agar kalkulasi nilai rata-rata akhir presisi dan tombol cetak aktif.</span>
                     </div>
 
-                    <div v-if="!filter.kelasOlahan" class="p-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl bg-white">
-                        Silakan tentukan Filter Kelas Output untuk melihat komparasi kalkulasi rapor.
-                    </div>
-
-                    <div v-else class="overflow-x-auto rounded-xl border border-gray-200">
+                    <div class="overflow-x-auto rounded-xl border border-gray-200">
                         <table class="w-full text-left border-collapse text-sm">
                             <thead class="bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
                                 <tr>
@@ -597,10 +591,10 @@
                                     <th class="p-4 text-center bg-blue-50/30">Rerata Sumatif</th>
                                     <th class="p-4 text-center">Rerata ASTS</th>
                                     <th class="p-4 text-center">Rerata ASAS</th>
-                                    <th v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center bg-emerald-100 text-emerald-800 font-bold">Rerata Rapor (60%)</th>
-                                    <th v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center bg-purple-50/50">Ujian Praktik</th>
-                                    <th v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center bg-amber-50/50">Ujian Tertulis</th>
-                                    <th v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center bg-purple-100 text-purple-800 font-bold">Rerata Ujian (40%)</th>
+                                    <th v-if="isKelas6String(filter.globalKelas)" class="p-4 text-center bg-emerald-100 text-emerald-800 font-bold">Rerata Rapor (60%)</th>
+                                    <th v-if="isKelas6String(filter.globalKelas)" class="p-4 text-center bg-purple-50/50">Ujian Praktik</th>
+                                    <th v-if="isKelas6String(filter.globalKelas)" class="p-4 text-center bg-amber-50/50">Ujian Tertulis</th>
+                                    <th v-if="isKelas6String(filter.globalKelas)" class="p-4 text-center bg-purple-100 text-purple-800 font-bold">Rerata Ujian (40%)</th>
                                     <th class="p-4 text-center bg-slate-800 text-white font-bold w-28">NILAI AKHIR</th>
                                 </tr>
                             </thead>
@@ -612,12 +606,12 @@
                                     <td class="p-4 text-center font-mono text-gray-600 bg-blue-50/10">{{ hitungRerataKomponen(siswa.id, 'sumatif') }}</td>
                                     <td class="p-4 text-center font-mono text-gray-600">{{ hitungRerataKomponen(siswa.id, 'asts') }}</td>
                                     <td class="p-4 text-center font-mono text-gray-600">{{ hitungRerataKomponen(siswa.id, 'asas') }}</td>
-                                    <td v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center font-mono font-bold bg-emerald-50 text-emerald-800">{{ hitungNilaiAkademis(siswa.id) }}</td>
-                                    <td v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center font-mono text-gray-600 bg-purple-50/10">{{ getUjian6Obj(siswa.id).praktik || 0 }}</td>
-                                    <td v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center font-mono text-gray-600 bg-amber-50/10">{{ getUjian6Obj(siswa.id).tertulis || 0 }}</td>
-                                    <td v-if="isKelas6String(filter.kelasOlahan)" class="p-4 text-center font-mono font-bold bg-purple-50 text-purple-800">{{ hitungRerataUjian(siswa.id) }}</td>
+                                    <td v-if="isKelas6String(filter.globalKelas)" class="p-4 text-center font-mono font-bold bg-emerald-50 text-emerald-800">{{ hitungNilaiAkademis(siswa.id) }}</td>
+                                    <td v-if="isKelas6String(filter.globalKelas)" class="p-4 text-center font-mono text-gray-600 bg-purple-50/10">{{ getUjian6Obj(siswa.id).praktik || 0 }}</td>
+                                    <td v-if="isKelas6String(filter.globalKelas)" class="p-4 text-center font-mono text-gray-600 bg-amber-50/10">{{ getUjian6Obj(siswa.id).tertulis || 0 }}</td>
+                                    <td v-if="isKelas6String(filter.globalKelas)" class="p-4 text-center font-mono font-bold bg-purple-50 text-purple-800">{{ hitungRerataUjian(siswa.id) }}</td>
                                     <td class="p-4 text-center font-mono font-bold bg-slate-100 text-slate-800 text-base">
-                                        {{ hitungNilaiAkhir(siswa.id, filter.kelasOlahan) }}
+                                        {{ hitungNilaiAkhir(siswa.id, filter.globalKelas) }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -633,13 +627,6 @@
                             <div>
                                 <h3 class="text-lg font-bold text-gray-800">Jurnal Mengajar Guru</h3>
                                 <p class="text-xs text-gray-400 mt-0.5 mb-3">Dokumentasi riwayat proses belajar mengajar harian.</p>
-                                <div class="flex items-center gap-3">
-                                    <label class="text-sm font-semibold text-gray-600">Filter Kelas:</label>
-                                    <select v-model="filter.kelasJurnal" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none bg-white">
-                                        <option value="Semua">Semua Kelas</option>
-                                        <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
-                                    </select>
-                                </div>
                             </div>
                             <div class="space-x-2">
                                 <button @click="openModalJurnal()" class="bg-[#1e293b] hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Isi Jurnal</button>
@@ -671,7 +658,7 @@
                                         </td>
                                     </tr>
                                     <tr v-if="jurnalTerfilter.length === 0">
-                                        <td colspan="6" class="p-6 text-center text-gray-400">Belum ada entry lembar jurnal pada filter kelas tersebut.</td>
+                                        <td colspan="6" class="p-6 text-center text-gray-400">Belum ada entry lembar jurnal pada Kelas {{ filter.globalKelas }}.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -684,13 +671,6 @@
                             <div>
                                 <h3 class="text-lg font-bold text-gray-800">Catatan Kredit Point Siswa</h3>
                                 <p class="text-xs text-gray-400 mt-0.5 mb-3">Sistem pencatatan riwayat prestasi (kredit) dan pelanggaran (sanksi) siswa.</p>
-                                <div class="flex items-center gap-3">
-                                    <label class="text-sm font-semibold text-gray-600">Filter Kelas:</label>
-                                    <select v-model="filter.kelasCatatan" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none bg-white">
-                                        <option value="Semua">Semua Kelas</option>
-                                        <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
-                                    </select>
-                                </div>
                             </div>
                             <div class="space-x-2">
                                 <button @click="openModalCatatan()" class="bg-[#1e293b] hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Tambah Kredit Point</button>
@@ -731,7 +711,7 @@
                                         </td>
                                     </tr>
                                     <tr v-if="catatanTerfilter.length === 0">
-                                        <td colspan="6" class="p-6 text-center text-gray-400">Belum ada riwayat catatan poin siswa pada filter kelas tersebut.</td>
+                                        <td colspan="6" class="p-6 text-center text-gray-400">Belum ada riwayat catatan poin siswa pada Kelas {{ filter.globalKelas }}.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -743,15 +723,8 @@
                 <section v-if="currentMenu === 'unduh-rekap'" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
                     <i class="fa-solid fa-file-excel text-5xl text-emerald-500 mb-4"></i>
                     <h3 class="text-xl font-bold text-gray-800 mb-2">Pusat Unduhan Rekapitulasi</h3>
-                    <p class="text-gray-500 text-sm max-w-md mx-auto mb-6">Unduh data akumulasi nilai harian, nilai akhir, serta presensi secara kolektif ke dalam satu berkas PDF atau Microsoft Excel (.xlsx) untuk laporan akhir.</p>
+                    <p class="text-gray-500 text-sm max-w-md mx-auto mb-8">Unduh data akumulasi nilai harian, nilai akhir, serta presensi secara kolektif ke dalam satu berkas PDF atau Microsoft Excel (.xlsx) untuk laporan akhir.</p>
                     
-                    <div class="flex justify-center items-center gap-3 mb-8 bg-gray-50 p-4 rounded-xl border border-gray-200 inline-flex mx-auto">
-                        <label class="text-sm font-semibold text-gray-600">Pilih Target Kelas:</label>
-                        <select v-model="filter.kelasRekap" class="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none shadow-sm font-bold text-gray-700 bg-white cursor-pointer">
-                            <option v-for="k in listRombel" :value="k">Kelas {{ k }}</option>
-                        </select>
-                    </div>
-
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
                         <div class="bg-emerald-50/50 border border-emerald-100 p-5 rounded-xl">
                             <h4 class="font-bold text-emerald-800 mb-3"><i class="fa-solid fa-calendar-check mr-2"></i>Rekap Presensi Semester</h4>
@@ -1107,6 +1080,10 @@ service cloud.firestore {
             <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
                 <h4 class="text-base font-bold text-gray-900 mb-4">{{ modal.bab.isEdit ? 'Ubah Bab' : 'Tambah Transkrip Bab' }}</h4>
                 <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase">Mata Pelajaran</label>
+                        <input type="text" v-model="modal.bab.data.mapel" readonly class="mt-1 w-full border border-gray-200 bg-gray-50 text-gray-500 font-bold rounded-lg p-2 text-sm focus:outline-none cursor-not-allowed">
+                    </div>
                     <div class="flex gap-4">
                         <div class="w-1/2">
                             <label class="block text-xs font-semibold text-gray-500 uppercase">Nomor Bab</label>
@@ -1484,7 +1461,7 @@ service cloud.firestore {
                 mapelAktif: 'Bahasa Inggris',
                 listMapel: ['Bahasa Inggris', 'Matematika', 'Bahasa Indonesia', 'IPAS', 'Pendidikan Pancasila'],
                 listKelas: ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'],
-                themeColor: '#b91c1c', 
+                themeColor: '#f472b6', 
                 parentSpreadsheetUrl: '',
                 username: 'eunoia',
                 password: '12345',
@@ -1494,6 +1471,7 @@ service cloud.firestore {
 
             // --- PRESET PALET WARNA UNTUK SIDEBAR ---
             const colorPresets = [
+                { name: '🌸 Pink Muda', color: '#f472b6' },
                 { name: '🍎 Crimson Red', color: '#b91c1c' },
                 { name: '💧 Biru Laut', color: '#1d4ed8' },
                 { name: '🌿 Emerald', color: '#047857' },
@@ -1516,10 +1494,11 @@ service cloud.firestore {
                 kelasRekap: '1A'
             });
 
-            // --- SISTEM AUTENTIKASI LOKAL & MULTI-TENANT (PISAH LISENSI) ---
-            const currentLicense = ref(localStorage.getItem('eunoia_active_license') || '');
-            const isLoggedIn = ref(localStorage.getItem('eunoia_session') === 'active' && currentLicense.value !== '');
-            const loginForm = ref({ license: localStorage.getItem('eunoia_last_license') || '', username: '', password: '', error: '' });
+            // --- SISTEM AUTENTIKASI LOKAL & MULTI-TENANT ---
+            const authMode = ref('login');
+            const currentUser = ref(localStorage.getItem('eunoia_active_user') || '');
+            const isLoggedIn = ref(localStorage.getItem('eunoia_session') === 'active' && currentUser.value !== '');
+            const authForm = ref({ username: localStorage.getItem('eunoia_last_user') || '', password: '', nama: '', error: '', success: '' });
             
             const showLogoutModal = ref(false);
 
@@ -1539,7 +1518,7 @@ service cloud.firestore {
                 mapelAktif: 'Bahasa Inggris',
                 listMapel: ['Bahasa Inggris', 'Matematika', 'Bahasa Indonesia', 'IPAS', 'Pendidikan Pancasila'],
                 listKelas: ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'],
-                themeColor: '#b91c1c', 
+                themeColor: '#f472b6', 
                 parentSpreadsheetUrl: '',
                 username: 'eunoia',
                 password: '12345',
@@ -1547,38 +1526,67 @@ service cloud.firestore {
                 firebase: { apiKey: '', authDomain: '', databaseURL: '', projectId: '', storageBucket: '', messagingSenderId: '', appId: '', measurementId: '' }
             });
 
-            const handleLogin = () => {
-                const lic = loginForm.value.license.trim().toUpperCase();
-                if(!lic) {
-                    loginForm.value.error = 'Kode Lisensi tidak boleh kosong!';
+            const handleAuth = () => {
+                authForm.value.error = '';
+                authForm.value.success = '';
+                const user = authForm.value.username.trim();
+                const pass = authForm.value.password;
+
+                if(!user || !pass) {
+                    authForm.value.error = 'Username dan Password wajib diisi!';
                     return;
                 }
 
-                // Melakukan validasi kredensial pada sandbox/brankas lisensi spesifik
-                let targetSettings = localStorage.getItem(`eunoia_settings_${lic}`);
-                let validUser = 'eunoia';
-                let validPass = '12345';
-                
-                if(targetSettings) {
-                    const parsedSet = JSON.parse(targetSettings);
-                    validUser = parsedSet.username || 'eunoia';
-                    validPass = parsedSet.password || '12345';
-                }
-                
-                if (loginForm.value.username === validUser && loginForm.value.password === validPass) {
-                    currentLicense.value = lic;
+                let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
+
+                if (authMode.value === 'register') {
+                    if (usersDb[user]) {
+                        authForm.value.error = 'Username sudah terdaftar. Silakan gunakan username lain.';
+                        return;
+                    }
+                    usersDb[user] = {
+                        password: pass,
+                        nama: authForm.value.nama || user,
+                        createdAt: new Date().toISOString()
+                    };
+                    localStorage.setItem('eunoia_users_db', JSON.stringify(usersDb));
+
+                    // Setup pengaturan default untuk akun baru
+                    const defaultSet = getDefaultSettings();
+                    defaultSet.namaGuru = authForm.value.nama || user;
+                    defaultSet.username = user;
+                    defaultSet.password = pass;
+                    localStorage.setItem(`eunoia_settings_${user}`, JSON.stringify(defaultSet));
+
+                    authForm.value.success = 'Pendaftaran berhasil! Silakan masuk menggunakan akun tersebut.';
+                    authMode.value = 'login';
+                    authForm.value.password = '';
+                } else {
+                    // Verifikasi login mode
+                    let validPass = '12345';
+                    if (usersDb[user]) {
+                        validPass = usersDb[user].password;
+                    } else if (user === 'eunoia' && pass === '12345') {
+                        // Fallback default akun (untuk demo pertama kali jika blm didaftarkan)
+                    } else {
+                        authForm.value.error = 'Username atau Password salah atau belum terdaftar!';
+                        return;
+                    }
+
+                    if (pass !== validPass && !(user === 'eunoia' && pass === '12345')) {
+                        authForm.value.error = 'Username atau Password salah!';
+                        return;
+                    }
+
+                    currentUser.value = user;
                     isLoggedIn.value = true;
                     localStorage.setItem('eunoia_session', 'active');
-                    localStorage.setItem('eunoia_active_license', lic);
-                    localStorage.setItem('eunoia_last_license', lic); // Mengingat lisensi terakhir di form login
-                    loginForm.value.error = '';
-                    loginForm.value.password = ''; 
-                    loginForm.value.username = '';
+                    localStorage.setItem('eunoia_active_user', user);
+                    localStorage.setItem('eunoia_last_user', user);
                     
-                    loadDataForLicense(lic);
-                } else {
-                    loginForm.value.error = 'Kredensial salah! Pastikan Kode Lisensi, Username, dan PIN sesuai dengan yang Anda daftarkan.';
-                    loginForm.value.password = ''; 
+                    authForm.value.password = ''; 
+                    
+                    loadDataForUser(user);
                 }
             };
 
@@ -1588,9 +1596,9 @@ service cloud.firestore {
 
             const konfirmasiLogout = () => {
                 isLoggedIn.value = false;
-                currentLicense.value = '';
+                currentUser.value = '';
                 localStorage.removeItem('eunoia_session');
-                localStorage.removeItem('eunoia_active_license');
+                localStorage.removeItem('eunoia_active_user');
                 currentMenu.value = 'data-siswa'; 
                 
                 // Bersihkan memory virtual agar tidak mengintip data orang lain
@@ -1599,9 +1607,9 @@ service cloud.firestore {
                 showLogoutModal.value = false;
             };
 
-            const loadDataForLicense = (lic) => {
-                const localStore = localStorage.getItem(`eunoia_datastore_${lic}`);
-                const localSet = localStorage.getItem(`eunoia_settings_${lic}`);
+            const loadDataForUser = (user) => {
+                const localStore = localStorage.getItem(`eunoia_datastore_${user}`);
+                const localSet = localStorage.getItem(`eunoia_settings_${user}`);
                 
                 if (localStore) datastore.value = JSON.parse(localStore);
                 else datastore.value = { siswa: [], presensi: {}, bab: [], nilai: [], ujian6: [], jurnal: [], catatan: [] };
@@ -1626,7 +1634,7 @@ service cloud.firestore {
             // --- MODAL WINDOW CONTROL ---
             const modal = ref({
                 siswa: { show: false, data: { id: null, nis: '', nisn: '', nama: '', ttl: '' } },
-                bab: { show: false, isEdit: false, data: { id: null, nomor: null, nama: '', tp: '', kelas: '' } },
+                bab: { show: false, isEdit: false, data: { id: null, nomor: null, nama: '', tp: '', kelas: '', mapel: '' } },
                 jurnal: { show: false, isEdit: false, data: { id: null, tanggal: '', kelas: '', materi: '', pencapaian: '', hambatan: '' } },
                 catatan: { show: false, isEdit: false, filterKelas: '', data: { id: null, siswaId: '', tanggal: '', jenis: 'Tambah', poin: 1, narasi: '' } }
             });
@@ -1794,22 +1802,37 @@ service cloud.firestore {
             });
 
             const saveToLocal = () => {
-                if(!currentLicense.value) return; // Mencegah data tersimpan di luar brankas lisensi
-                localStorage.setItem(`eunoia_datastore_${currentLicense.value}`, JSON.stringify(datastore.value));
-                localStorage.setItem(`eunoia_settings_${currentLicense.value}`, JSON.stringify(settings.value));
+                if(!currentUser.value) return; // Mencegah data tersimpan di luar brankas user
+                localStorage.setItem(`eunoia_datastore_${currentUser.value}`, JSON.stringify(datastore.value));
+                localStorage.setItem(`eunoia_settings_${currentUser.value}`, JSON.stringify(settings.value));
             };
 
             onMounted(() => {
-                if (isLoggedIn.value && currentLicense.value) {
-                    loadDataForLicense(currentLicense.value);
+                if (isLoggedIn.value && currentUser.value) {
+                    loadDataForUser(currentUser.value);
                 }
             });
 
             watch(datastore, () => saveToLocal(), { deep: true });
             watch(settings, () => saveToLocal(), { deep: true });
 
-            watch(() => filter.value.kelasNilai, (newKelas) => {
-                const availableBab = datastore.value.bab.filter(b => b.kelas === newKelas || (!b.kelas && newKelas === '1A'));
+            watch(() => filter.value.globalKelas, (newKelas) => {
+                const availableBab = datastore.value.bab.filter(b => 
+                    (b.kelas === newKelas || (!b.kelas && newKelas === '1A')) &&
+                    (b.mapel === settings.value.mapelAktif || !b.mapel)
+                );
+                if (availableBab.length > 0) {
+                    filter.value.babNilai = availableBab[0].id;
+                } else {
+                    filter.value.babNilai = '';
+                }
+            });
+
+            watch(() => settings.value.mapelAktif, (newMapel) => {
+                const availableBab = datastore.value.bab.filter(b => 
+                    (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) &&
+                    (b.mapel === newMapel || !b.mapel)
+                );
                 if (availableBab.length > 0) {
                     filter.value.babNilai = availableBab[0].id;
                 } else {
@@ -1826,13 +1849,22 @@ service cloud.firestore {
                 return datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
             });
 
-            const babTerfilter = computed(() => {
-                return datastore.value.bab.filter(b => b.kelas === filter.value.kelasBab || (!b.kelas && filter.value.kelasBab === '1A'));
+            // PERUBAHAN: Membuat Computed Property baru khusus untuk disortir berdasarkan nomor bab (agar urutan barisnya selalu rapi dan mudah di-grouping visualnya)
+            const babTerfilterSorted = computed(() => {
+                const filterBab = datastore.value.bab.filter(b => 
+                    (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) &&
+                    (b.mapel === settings.value.mapelAktif || !b.mapel)
+                );
+                // Urutkan berdasarkan nomor bab terlebih dahulu agar TP untuk bab yang sama bersebelahan.
+                return filterBab.sort((a, b) => a.nomor - b.nomor);
             });
 
             const babTerfilterNilai = computed(() => {
-                if (!filter.value.kelasNilai) return [];
-                return datastore.value.bab.filter(b => b.kelas === filter.value.kelasNilai || (!b.kelas && filter.value.kelasNilai === '1A'));
+                if (!filter.value.globalKelas) return [];
+                return datastore.value.bab.filter(b => 
+                    (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) &&
+                    (b.mapel === settings.value.mapelAktif || !b.mapel)
+                ).sort((a, b) => a.nomor - b.nomor);
             });
 
             const tambahSiswaCepat = () => {
@@ -1950,8 +1982,7 @@ service cloud.firestore {
 
             // --- LOGIKA MODUL B: PRESENSI ---
             const siswaTerfilterPresensi = computed(() => {
-                if (filter.value.kelasPresensi === 'Semua') return datastore.value.siswa;
-                return datastore.value.siswa.filter(s => s.kelas === filter.value.kelasPresensi);
+                return datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
             });
 
             const setPresensi = (siswaId, status) => {
@@ -2005,7 +2036,7 @@ service cloud.firestore {
                 });
                 let ws = XLSX.utils.json_to_sheet(data);
                 XLSX.utils.book_append_sheet(wb, ws, "Rekap Semester");
-                XLSX.writeFile(wb, `Rekap_Presensi_Semester_Kelas_${filter.value.kelasPresensi}.xlsx`);
+                XLSX.writeFile(wb, `Rekap_Presensi_Semester_Kelas_${filter.value.globalKelas}.xlsx`);
             };
 
             // --- LOGIKA MANAJEMEN BAB ---
@@ -2013,18 +2044,29 @@ service cloud.firestore {
                 if (bab) {
                     modal.value.bab.isEdit = true;
                     modal.value.bab.data = { ...bab };
-                    if (!modal.value.bab.data.kelas) modal.value.bab.data.kelas = filter.value.kelasBab;
+                    if (!modal.value.bab.data.kelas) modal.value.bab.data.kelas = filter.value.globalKelas;
+                    if (!modal.value.bab.data.mapel) modal.value.bab.data.mapel = settings.value.mapelAktif;
                 } else {
                     modal.value.bab.isEdit = false;
-                    const babSamaKelas = datastore.value.bab.filter(b => b.kelas === filter.value.kelasBab || (!b.kelas && filter.value.kelasBab === '1A'));
-                    modal.value.bab.data = { id: Date.now(), nomor: babSamaKelas.length + 1, nama: '', tp: '', kelas: filter.value.kelasBab };
+                    const babSamaKelasMapel = datastore.value.bab.filter(b => 
+                        (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) &&
+                        (b.mapel === settings.value.mapelAktif || !b.mapel)
+                    );
+                    modal.value.bab.data = { 
+                        id: Date.now(), 
+                        nomor: babSamaKelasMapel.length + 1, 
+                        nama: '', 
+                        tp: '', 
+                        kelas: filter.value.globalKelas,
+                        mapel: settings.value.mapelAktif
+                    };
                 }
                 modal.value.bab.show = true;
             };
 
             const simpanBab = () => {
                 const d = modal.value.bab.data;
-                if (!d.nomor || !d.nama || !d.tp || !d.kelas) return alert('Mohon lengkapi semua aspek deskripsi!');
+                if (!d.nomor || !d.nama || !d.tp || !d.kelas || !d.mapel) return alert('Mohon lengkapi semua aspek deskripsi!');
                 if (modal.value.bab.isEdit) {
                     const i = datastore.value.bab.findIndex(b => b.id === d.id);
                     if (i !== -1) datastore.value.bab[i] = d;
@@ -2036,15 +2078,15 @@ service cloud.firestore {
             };
 
             const hapusBab = (id) => {
-                if (confirm('Hapus Bab ini akan berdampak pada hilangnya tautan data nilai terikat. Lanjutkan?')) {
+                if (confirm('Hapus Tujuan Pembelajaran (TP) ini akan berdampak pada hilangnya tautan data nilai terikat. Lanjutkan?')) {
                     datastore.value.bab = datastore.value.bab.filter(b => b.id !== id);
                 }
             };
 
             // --- LOGIKA MODUL D: INPUT NILAI ---
             const siswaTerfilterNilai = computed(() => {
-                if (!filter.value.kelasNilai) return [];
-                return datastore.value.siswa.filter(s => s.kelas === filter.value.kelasNilai);
+                if (!filter.value.globalKelas) return [];
+                return datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
             });
 
             const getNilaiObj = (siswaId, babId) => {
@@ -2057,7 +2099,7 @@ service cloud.firestore {
             };
 
             const exportNilaiExcel = () => {
-                if (!filter.value.kelasNilai || !filter.value.babNilai) return alert('Tentukan parameter filter sebelum unduh data.');
+                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Tentukan parameter filter sebelum unduh data.');
                 let wb = XLSX.utils.book_new();
                 let data = siswaTerfilterNilai.value.map((s, i) => {
                     let obj = getNilaiObj(s.id, filter.value.babNilai);
@@ -2065,11 +2107,11 @@ service cloud.firestore {
                 });
                 let ws = XLSX.utils.json_to_sheet(data);
                 XLSX.utils.book_append_sheet(wb, ws, "Nilai");
-                XLSX.writeFile(wb, `Rekap_Nilai_Kelas_${filter.value.kelasNilai}_BabID_${filter.value.babNilai}.xlsx`);
+                XLSX.writeFile(wb, `Rekap_Nilai_Kelas_${filter.value.globalKelas}_BabID_${filter.value.babNilai}.xlsx`);
             };
 
             const downloadTemplateNilai = () => {
-                if (!filter.value.kelasNilai || !filter.value.babNilai) return alert('Silakan pilih Kelas dan Acuan Bab terlebih dahulu!');
+                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Silakan pilih Acuan Bab terlebih dahulu!');
                 let wb = XLSX.utils.book_new();
                 let data = siswaTerfilterNilai.value.map(s => {
                     return { 'ID_SISTEM': s.id, 'Nama Lengkap': s.nama, 'Formatif': 0, 'Sumatif': 0, 'ASTS': 0, 'ASAS': 0 };
@@ -2081,11 +2123,11 @@ service cloud.firestore {
 
                 let ws = XLSX.utils.json_to_sheet(data);
                 XLSX.utils.book_append_sheet(wb, ws, "Template_Nilai");
-                XLSX.writeFile(wb, `Template_Import_Nilai_Kelas_${filter.value.kelasNilai}.xlsx`);
+                XLSX.writeFile(wb, `Template_Import_Nilai_Kelas_${filter.value.globalKelas}.xlsx`);
             };
 
             const handleExcelImportNilai = (e) => {
-                if (!filter.value.kelasNilai || !filter.value.babNilai) return alert('Pilih Kelas dan Bab terlebih dahulu sebelum mengimpor!');
+                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Pilih Bab terlebih dahulu sebelum mengimpor!');
                 const file = e.target.files[0];
                 if (!file) return;
                 
@@ -2121,7 +2163,7 @@ service cloud.firestore {
             };
 
             const handleJsonImportNilai = () => {
-                if (!filter.value.kelasNilai || !filter.value.babNilai) return alert('Pilih Kelas dan Bab terlebih dahulu!');
+                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Pilih Bab terlebih dahulu!');
                 try {
                     const parsed = JSON.parse(jsonImportNilai.value);
                     if (Array.isArray(parsed)) {
@@ -2167,8 +2209,8 @@ service cloud.firestore {
 
             // --- LOGIKA MODUL F: OLAHAN NILAI AKHIR ---
             const siswaTerfilterOlahan = computed(() => {
-                if (!filter.value.kelasOlahan) return [];
-                return datastore.value.siswa.filter(s => s.kelas === filter.value.kelasOlahan);
+                if (!filter.value.globalKelas) return [];
+                return datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
             });
 
             const hitungRerataKomponen = (siswaId, komponen) => {
@@ -2203,15 +2245,13 @@ service cloud.firestore {
 
             // --- LOGIKA MODUL G: JURNAL & CATATAN ---
             const jurnalTerfilter = computed(() => {
-                if (filter.value.kelasJurnal === 'Semua') return datastore.value.jurnal;
-                return datastore.value.jurnal.filter(j => j.kelas === filter.value.kelasJurnal);
+                return datastore.value.jurnal.filter(j => j.kelas === filter.value.globalKelas);
             });
 
             const catatanTerfilter = computed(() => {
-                if (filter.value.kelasCatatan === 'Semua') return datastore.value.catatan;
                 return datastore.value.catatan.filter(c => {
                     let siswa = datastore.value.siswa.find(s => s.id === c.siswaId);
-                    return siswa && siswa.kelas === filter.value.kelasCatatan;
+                    return siswa && siswa.kelas === filter.value.globalKelas;
                 });
             });
 
@@ -2288,7 +2328,7 @@ service cloud.firestore {
 
             // --- LOGIKA MODUL H (UNDUH REKAP) ---
             const exportRekapPresensiExcelModulH = () => {
-                let k = filter.value.kelasRekap;
+                let k = filter.value.globalKelas;
                 let siswaKelas = datastore.value.siswa.filter(s => s.kelas === k);
                 if (siswaKelas.length === 0) return alert('Tidak ada siswa di kelas ' + k);
                 let rekap = siswaKelas.map((s, i) => {
@@ -2309,7 +2349,7 @@ service cloud.firestore {
             };
 
             const exportRekapNilaiExcelModulH = () => {
-                let k = filter.value.kelasRekap;
+                let k = filter.value.globalKelas;
                 let siswaKelas = datastore.value.siswa.filter(s => s.kelas === k);
                 if (siswaKelas.length === 0) return alert('Tidak ada siswa di kelas ' + k);
                 let is6 = isKelas6String(k);
@@ -2336,7 +2376,6 @@ service cloud.firestore {
                 if (type === 'Presensi') {
                     triggerPrint('Rekap Presensi Semester');
                 } else {
-                    filter.value.kelasOlahan = filter.value.kelasRekap; 
                     triggerPrint('Olahan Nilai');
                 }
             };
@@ -2407,15 +2446,7 @@ service cloud.firestore {
             // --- ENGINE CORE DOKUMEN CETAK PDF ---
             const triggerPrint = (modulName) => {
                 printMeta.value.judul = modulName;
-                
-                let focusKelas = filter.value.globalKelas;
-                if (modulName === 'Presensi') focusKelas = filter.value.kelasPresensi;
-                if (modulName === 'Rekap Presensi Semester') focusKelas = filter.value.kelasRekap;
-                if (modulName === 'Input Nilai') focusKelas = filter.value.kelasNilai;
-                if (modulName === 'Olahan Nilai') focusKelas = filter.value.kelasOlahan;
-                if (modulName === 'Jurnal Mengajar' && filter.value.kelasJurnal !== 'Semua') focusKelas = filter.value.kelasJurnal;
-                if (modulName === 'Catatan Siswa' && filter.value.kelasCatatan !== 'Semua') focusKelas = filter.value.kelasCatatan;
-                printMeta.value.fokusKelas = focusKelas;
+                printMeta.value.fokusKelas = filter.value.globalKelas;
 
                 let rows = [];
                 let headers = [];
@@ -2451,7 +2482,7 @@ service cloud.firestore {
                     case 'Rekap Presensi Semester':
                         headers = ['No', 'Nama Siswa', 'Kelas', 'Hadir', 'Sakit', 'Izin', 'Alpa'];
                         keys = ['nama', 'kelas', 'H', 'S', 'I', 'A'];
-                        let siswaK = datastore.value.siswa.filter(s => s.kelas === filter.value.kelasRekap);
+                        let siswaK = datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
                         rows = siswaK.map(s => {
                             let H = 0, S = 0, I = 0, A = 0;
                             for (let tgl in datastore.value.presensi) {
@@ -2473,7 +2504,7 @@ service cloud.firestore {
                         });
                         break;
                     case 'Olahan Nilai':
-                        let is6 = isKelas6String(filter.value.kelasOlahan);
+                        let is6 = isKelas6String(filter.value.globalKelas);
                         headers = is6 ? ['No', 'Nama Siswa', 'Form', 'Sum', 'ASTS', 'ASAS', 'Rapor (60%)', 'Prak', 'Tertulis', 'Ujian (40%)', 'N. AKHIR'] 
                                       : ['No', 'Nama Siswa', 'Form', 'Sum', 'ASTS', 'ASAS', 'N. AKHIR'];
                         keys = is6 ? ['nama', 'f', 's', 'asts', 'asas', 'rapor', 'p', 't', 'ujian', 'na']
@@ -2488,7 +2519,7 @@ service cloud.firestore {
                             p: getUjian6Obj(s.id).praktik,
                             t: getUjian6Obj(s.id).tertulis,
                             ujian: hitungRerataUjian(s.id),
-                            na: hitungNilaiAkhir(s.id, filter.value.kelasOlahan)
+                            na: hitungNilaiAkhir(s.id, filter.value.globalKelas)
                         }));
                         break;
                     case 'Jurnal Mengajar':
@@ -2617,13 +2648,14 @@ service cloud.firestore {
                 getMenuName,
                 sidebarTextColor,
                 isLoggedIn,
-                loginForm,
-                handleLogin,
+                authMode,
+                authForm,
+                handleAuth,
                 handleLogout,
                 konfirmasiLogout,
                 showLogoutModal,
                 siswaTerfilterGlobal,
-                babTerfilter,
+                babTerfilterSorted,
                 babTerfilterNilai,
                 tambahSiswaCepat,
                 hapusSiswa,
