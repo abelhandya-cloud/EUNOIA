@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>EUNOIA - Aplikasi Administrasi Guru</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -122,7 +122,10 @@
                             </div>
                             <div class="relative">
                                 <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                                <input type="password" v-model="authForm.password" placeholder="••••••••" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                                <input :type="showPass.auth ? 'text' : 'password'" v-model="authForm.password" placeholder="••••••••" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                                <button type="button" @click="showPass.auth = !showPass.auth" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition">
+                                    <i class="fa-solid" :class="showPass.auth ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
                             </div>
                         </div>
                     </template>
@@ -153,7 +156,10 @@
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 mt-4">Kata Sandi Baru</label>
                             <div class="relative">
                                 <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                                <input type="password" v-model="authForm.password" placeholder="Buat sandi baru (min 5 karakter)" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                                <input :type="showPass.auth ? 'text' : 'password'" v-model="authForm.password" placeholder="Buat sandi baru (min 5 karakter)" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-3.5 pl-11 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 focus:bg-white transition shadow-sm">
+                                <button type="button" @click="showPass.auth = !showPass.auth" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition">
+                                    <i class="fa-solid" :class="showPass.auth ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
                             </div>
                         </div>
 
@@ -169,6 +175,7 @@
                     <p class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
                         <i class="fa-solid fa-shield-halved mr-1 text-emerald-500"></i> Data Tersinkronisasi & Tersimpan Secara Lokal
                     </p>
+                    <p class="text-[10px] text-gray-400 mt-2 font-medium">&copy; 2026 Fabelia Handiani. All Rights Reserved.</p>
                 </div>
             </div>
         </div>
@@ -222,7 +229,7 @@
                     </div>
                 </div>
                 <div class="mt-3 pt-3 border-t border-white/10 text-center">
-                    <span class="text-[9px] tracking-wide font-medium opacity-60 block">dikembangkan oleh Fabelia Handiani</span>
+                    <span class="text-[8px] tracking-wide font-medium opacity-40 block mt-0.5">&copy; 2026 Fabelia Handiani. All Rights Reserved.</span>
                 </div>
             </div>
         </aside>
@@ -915,15 +922,30 @@
                         <div class="space-y-3">
                             <div>
                                 <label class="block text-xs font-semibold text-gray-500 uppercase">Sandi Saat Ini</label>
-                                <input type="password" v-model="formGantiSandi.lama" placeholder="Masukkan sandi saat ini" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 focus:bg-white">
+                                <div class="relative mt-1">
+                                    <input :type="showPass.lama ? 'text' : 'password'" v-model="formGantiSandi.lama" placeholder="Masukkan sandi saat ini" class="w-full border border-gray-300 rounded-lg p-2 pr-10 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 focus:bg-white transition">
+                                    <button type="button" @click="showPass.lama = !showPass.lama" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none">
+                                        <i class="fa-solid" :class="showPass.lama ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-gray-500 uppercase">Sandi Baru</label>
-                                <input type="password" v-model="formGantiSandi.baru" placeholder="Masukkan sandi baru" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 focus:bg-white">
+                                <div class="relative mt-1">
+                                    <input :type="showPass.baru ? 'text' : 'password'" v-model="formGantiSandi.baru" placeholder="Masukkan sandi baru" class="w-full border border-gray-300 rounded-lg p-2 pr-10 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 focus:bg-white transition">
+                                    <button type="button" @click="showPass.baru = !showPass.baru" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none">
+                                        <i class="fa-solid" :class="showPass.baru ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-gray-500 uppercase">Konfirmasi Sandi Baru</label>
-                                <input type="password" v-model="formGantiSandi.konfirmasi" placeholder="Ulangi sandi baru" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 focus:bg-white">
+                                <div class="relative mt-1">
+                                    <input :type="showPass.konfirmasi ? 'text' : 'password'" v-model="formGantiSandi.konfirmasi" placeholder="Ulangi sandi baru" class="w-full border border-gray-300 rounded-lg p-2 pr-10 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 focus:bg-white transition">
+                                    <button type="button" @click="showPass.konfirmasi = !showPass.konfirmasi" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none">
+                                        <i class="fa-solid" :class="showPass.konfirmasi ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="pt-2">
                                 <button @click="prosesGantiSandi()" class="bg-[#1e293b] hover:bg-slate-800 text-white font-bold text-xs px-5 py-2.5 rounded-lg transition shadow-sm"><i class="fa-solid fa-floppy-disk mr-2"></i>Simpan Sandi Baru</button>
@@ -1541,12 +1563,13 @@ service cloud.firestore {
             const authMode = ref('login');
             const currentUser = ref(localStorage.getItem('eunoia_active_user') || '');
             const isLoggedIn = ref(localStorage.getItem('eunoia_session') === 'active' && currentUser.value !== '');
-            const authForm = ref({ username: localStorage.getItem('eunoia_last_user') || '', password: '', nama: '', email: '', verificationCode: '', error: '', success: '' });
+            const authForm = ref({ username: localStorage.getItem('username_last_user') || '', password: '', nama: '', email: '', verificationCode: '', error: '', success: '' });
             
             const tempOtp = ref('');
             const tempUserData = ref(null);
             
             const formGantiSandi = ref({ lama: '', baru: '', konfirmasi: '' });
+            const showPass = ref({ auth: false, lama: false, baru: false, konfirmasi: false });
             
             const showLogoutModal = ref(false);
 
@@ -2850,6 +2873,7 @@ service cloud.firestore {
                 requestForgotPassword,
                 processResetPassword,
                 formGantiSandi,
+                showPass,
                 prosesGantiSandi,
                 handleLogout,
                 konfirmasiLogout,
