@@ -523,17 +523,12 @@
                 <section v-if="currentMenu === 'input-nilai'" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <div class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
                         <div>
-                            <h3 class="text-lg font-bold text-gray-800">Penginputan Evaluasi Belajar</h3>
-                            <div class="flex flex-wrap gap-3 mt-2">
-                                <select v-model="filter.babNilai" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-100 focus:outline-none bg-white font-semibold text-gray-700">
-                                    <option value="" disabled>-- Pilih Acuan Bab --</option>
-                                    <option v-for="b in babTerfilterNilai" :value="b.id">Bab {{ b.nomor }}: {{ b.nama }}</option>
-                                </select>
-                            </div>
+                            <h3 class="text-lg font-bold text-gray-800">Penginputan Evaluasi Belajar (Matriks Terpadu)</h3>
+                            <p class="text-xs text-gray-400 mt-1">Struktur kolom Formatif dan Sumatif di bawah ini menyesuaikan dengan matriks Bab/TP yang telah Anda susun.</p>
                         </div>
                         <div class="space-x-2 self-end lg:self-center flex flex-wrap gap-y-2">
                             <button @click="showImportNilai = !showImportNilai" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-file-import mr-2"></i>Import Nilai</button>
-                            <button @click="exportNilaiExcel()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-file-excel mr-2"></i>Unduh Nilai Harian</button>
+                            <button @click="exportNilaiExcel()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-file-excel mr-2"></i>Unduh Matriks Harian</button>
                             <button @click="triggerPrint('Input Nilai')" class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold px-4 py-2.5 rounded-xl transition"><i class="fa-solid fa-print mr-2"></i>Cetak PDF</button>
                         </div>
                     </div>
@@ -541,48 +536,77 @@
                     <!-- Panel Import Nilai -->
                     <div v-if="showImportNilai" class="bg-indigo-50 border border-indigo-100 p-5 rounded-xl mb-6 shadow-inner">
                         <h4 class="font-bold text-indigo-800 mb-3 text-sm flex items-center"><i class="fa-solid fa-cloud-arrow-down mr-2"></i>Import Massal Nilai Siswa</h4>
-                        <p class="text-xs text-indigo-600 mb-4 font-semibold">Pastikan <span class="bg-indigo-100 px-1 rounded">Acuan Bab</span> sudah dipilih terlebih dahulu sebelum melakukan Import/Download Template.</p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <!-- Excel Import -->
                             <div class="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm">
                                 <h5 class="text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">1. Import via Excel</h5>
-                                <button @click="downloadTemplateNilai()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded mb-3 transition shadow-sm w-full sm:w-auto"><i class="fa-solid fa-download mr-1"></i>Unduh Template Excel</button>
+                                <button @click="downloadTemplateNilai()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded mb-3 transition shadow-sm w-full sm:w-auto"><i class="fa-solid fa-download mr-1"></i>Unduh Template Matriks Excel</button>
                                 <label class="block text-[10px] text-gray-400 mb-1">Upload File Template (.xlsx) yang sudah diisi:</label>
                                 <input type="file" @change="handleExcelImportNilai" accept=".xlsx, .xls" class="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer border border-gray-200 rounded p-1">
                             </div>
-                            <!-- JSON Import -->
-                            <div class="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm flex flex-col">
-                                <h5 class="text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">2. Import via JSON (Paste)</h5>
-                                <textarea v-model="jsonImportNilai" placeholder='Contoh: [{"nama":"Bunga Lestari", "formatif":85, "sumatif":90, "asts":80, "asas":80}]' class="w-full flex-1 border border-gray-300 rounded p-2 text-xs font-mono focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 mb-2 shadow-inner resize-none"></textarea>
-                                <button @click="handleJsonImportNilai()" class="text-xs bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded transition font-bold shadow-sm">Proses Data JSON</button>
+                            <!-- Info -->
+                            <div class="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm flex flex-col justify-center text-center">
+                                <i class="fa-solid fa-circle-info text-2xl text-indigo-300 mb-2"></i>
+                                <p class="text-xs text-gray-500 font-medium">Mohon unduh template baru setiap kali ada perubahan jumlah TP/Bab di menu sebelah, agar kolom Excel selaras dengan matriks saat ini.</p>
                             </div>
                         </div>
                     </div>
 
-                    <div v-if="!filter.babNilai" class="p-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl bg-white">
-                        <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300 block"></i> Harap buat dan pilih Acuan Bab terlebih dahulu untuk memunculkan lembar penilaian.
+                    <div v-if="groupedBab.length === 0" class="p-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl bg-white">
+                        <i class="fa-solid fa-folder-open text-2xl mb-2 text-gray-300 block"></i> Harap buat minimal 1 Bab/TP di menu <strong>Bab & Tujuan Belajar</strong> untuk memunculkan matriks penilaian kelas ini.
                     </div>
 
-                    <div v-else class="overflow-x-auto rounded-xl border border-gray-200 w-full shadow-sm">
-                        <table class="w-full min-w-max text-left border-collapse text-sm">
-                            <thead class="bg-gray-50 border-b border-gray-200 font-semibold text-gray-600">
+                    <div v-else class="block w-full overflow-x-auto rounded-xl border border-gray-200 shadow-sm pb-2">
+                        <table class="w-full min-w-max text-left border-collapse text-[11px]">
+                            <thead class="bg-gray-50 text-gray-700 uppercase font-bold tracking-wider text-center">
+                                <!-- BARIS 1: Kategori Utama -->
                                 <tr>
-                                    <th class="p-4 w-12 text-center">No</th>
-                                    <th class="p-4 w-64">Nama Siswa</th>
-                                    <th class="p-4 text-center bg-emerald-50/50 w-32">Formatif (Harian)</th>
-                                    <th class="p-4 text-center bg-blue-50/50 w-32">Sumatif (Bab)</th>
-                                    <th class="p-4 text-center w-28">ASTS</th>
-                                    <th class="p-4 text-center w-28">ASAS</th>
+                                    <th rowspan="3" class="border border-gray-300 p-2 w-12 align-middle bg-white">No</th>
+                                    <th rowspan="3" class="border border-gray-300 p-2 min-w-[200px] align-middle text-left bg-white">Nama Siswa</th>
+                                    <th :colspan="totalTps" class="border border-gray-300 p-2 bg-emerald-100/60 text-emerald-800">Formatif</th>
+                                    <th :colspan="totalBabs" class="border border-gray-300 p-2 bg-blue-100/60 text-blue-800">Sumatif</th>
+                                    <th rowspan="3" class="border border-gray-300 p-2 w-16 align-middle bg-white text-gray-500">ASTS</th>
+                                    <th rowspan="3" class="border border-gray-300 p-2 w-16 align-middle bg-white text-gray-500">ASAS</th>
+                                </tr>
+                                <!-- BARIS 2: Bab (Grup) -->
+                                <tr>
+                                    <!-- Formatif Babs -->
+                                    <th v-for="group in groupedBab" :key="'fh-'+group.nomor" :colspan="group.tps.length" class="border border-gray-300 p-1.5 bg-emerald-50 text-emerald-700">BAB {{ group.nomor }}</th>
+                                    <!-- Sumatif Babs -->
+                                    <th v-for="group in groupedBab" :key="'sh-'+group.nomor" rowspan="2" class="border border-gray-300 p-1.5 bg-blue-50/50 align-middle text-blue-700">BAB {{ group.nomor }}</th>
+                                </tr>
+                                <!-- BARIS 3: TP (Sub-Grup Formatif) -->
+                                <tr>
+                                    <!-- Formatif TPs -->
+                                    <template v-for="group in groupedBab">
+                                        <th v-for="(tp, idx) in group.tps" :key="'tp-'+tp.id" class="border border-gray-300 p-1.5 bg-white font-semibold text-gray-500 min-w-[60px]" :title="tp.tp">TP {{ idx + 1 }}</th>
+                                    </template>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100 bg-white">
-                                <tr v-for="(siswa, idx) in siswaTerfilterNilai" :key="siswa.id" class="hover:bg-gray-50/50">
-                                    <td class="p-4 text-center text-gray-500">{{ idx + 1 }}</td>
-                                    <td class="p-4 font-semibold text-gray-700">{{ siswa.nama }}</td>
-                                    <td class="p-3 bg-emerald-50/20"><input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, filter.babNilai).formatif" class="w-full text-center border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-emerald-400 focus:outline-none"></td>
-                                    <td class="p-3 bg-blue-50/20"><input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, filter.babNilai).sumatif" class="w-full text-center border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-blue-400 focus:outline-none"></td>
-                                    <td class="p-3"><input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, filter.babNilai).asts" class="w-full text-center border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-gray-400 focus:outline-none"></td>
-                                    <td class="p-3"><input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, filter.babNilai).asas" class="w-full text-center border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-gray-400 focus:outline-none"></td>
+                                <tr v-for="(siswa, idx) in siswaTerfilterNilai" :key="siswa.id" class="hover:bg-gray-50 transition">
+                                    <td class="border border-gray-200 p-2 text-center text-gray-500">{{ idx + 1 }}</td>
+                                    <td class="border border-gray-200 p-2 font-semibold text-gray-700">{{ siswa.nama }}</td>
+                                    
+                                    <!-- Formatif Inputs -->
+                                    <template v-for="group in groupedBab">
+                                        <td v-for="tp in group.tps" :key="'f-in-'+tp.id" class="border border-gray-200 p-0.5 bg-emerald-50/10">
+                                            <input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, tp.id).f1" class="w-full text-center border-none py-1.5 focus:ring-1 focus:ring-emerald-400 bg-transparent outline-none font-medium">
+                                        </td>
+                                    </template>
+                                    
+                                    <!-- Sumatif Inputs -->
+                                    <td v-for="group in groupedBab" :key="'s-in-'+group.nomor" class="border border-gray-200 p-0.5 bg-blue-50/10">
+                                        <input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, group.tps[0].id).sumatif" class="w-full text-center border-none py-1.5 focus:ring-1 focus:ring-blue-400 bg-transparent outline-none font-bold">
+                                    </td>
+                                    
+                                    <!-- ASTS / ASAS Inputs -->
+                                    <td class="border border-gray-200 p-0.5">
+                                        <input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, groupedBab[0].tps[0].id).asts" class="w-full text-center border-none py-1.5 focus:ring-1 focus:ring-gray-400 bg-transparent outline-none font-bold">
+                                    </td>
+                                    <td class="border border-gray-200 p-0.5">
+                                        <input type="number" min="0" max="100" v-model.number="getNilaiObj(siswa.id, groupedBab[0].tps[0].id).asas" class="w-full text-center border-none py-1.5 focus:ring-1 focus:ring-gray-400 bg-transparent outline-none font-bold">
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -868,6 +892,19 @@
                             <div>
                                 <label class="block text-xs font-semibold text-gray-500 uppercase">Tahun Ajaran</label>
                                 <input type="text" v-model="settings.tahunAjaran" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-1 focus:ring-blue-400 focus:outline-none">
+                            </div>
+                            <div class="col-span-2 border-t border-gray-100 pt-3 mt-2">
+                                <h4 class="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wider">Data Penandatangan Laporan</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-500 uppercase">Nama Kepala Sekolah</label>
+                                        <input type="text" v-model="settings.namaKepsek" placeholder="Nama lengkap kepala sekolah" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-1 focus:ring-blue-400 focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-500 uppercase">NIP Kepala Sekolah</label>
+                                        <input type="text" v-model="settings.nipKepsek" placeholder="NIP kepala sekolah" class="mt-1 w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-1 focus:ring-blue-400 focus:outline-none">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1489,8 +1526,8 @@ service cloud.firestore {
                     <p>Mengetahui,</p>
                     <p class="font-semibold">Kepala Sekolah</p>
                     <div class="h-20"></div>
-                    <p class="font-bold underline text-sm">......................................................</p>
-                    <p>NIP. ..........................................</p>
+                    <p class="font-bold underline text-sm">{{ settings.namaKepsek || '......................................................' }}</p>
+                    <p>NIP. {{ settings.nipKepsek || '..........................................' }}</p>
                 </div>
                 <div>
                     <p>Salatiga, {{ formatTanggalIndo(new Date().toISOString().split('T')[0]) }}</p>
@@ -2109,6 +2146,23 @@ service cloud.firestore {
                 ).sort((a, b) => a.nomor - b.nomor);
             });
 
+            // LOGIKA BARU: Grouping Bab & TP untuk matriks dinamis Input Nilai
+            const groupedBab = computed(() => {
+                const groups = [];
+                babTerfilterNilai.value.forEach(b => {
+                    let group = groups.find(g => g.nomor === b.nomor);
+                    if (!group) {
+                        group = { nomor: b.nomor, nama: b.nama, tps: [] };
+                        groups.push(group);
+                    }
+                    group.tps.push(b);
+                });
+                return groups;
+            });
+
+            const totalTps = computed(() => groupedBab.value.reduce((sum, g) => sum + g.tps.length, 0));
+            const totalBabs = computed(() => groupedBab.value.length);
+
             const tambahSiswaCepat = () => {
                 if (!formSiswaCepat.value.nis || !formSiswaCepat.value.nama) {
                     return alert('NIS dan Nama Lengkap harus diisi terlebih dahulu!');
@@ -2379,33 +2433,62 @@ service cloud.firestore {
             const getNilaiObj = (siswaId, babId) => {
                 let item = datastore.value.nilai.find(n => n.siswaId === siswaId && n.babId === babId);
                 if (!item) {
-                    item = { siswaId, babId, formatif: 0, sumatif: 0, asts: 0, asas: 0 };
+                    item = { siswaId, babId, f1: null, f2: null, f3: null, f4: null, sumatif: null, asts: null, asas: null };
                     datastore.value.nilai.push(item);
+                } else if (item.formatif !== undefined && item.f1 === undefined) {
+                    // Backward compatibility untuk data nilai formatif versi lama
+                    item.f1 = item.formatif;
+                    delete item.formatif;
                 }
                 return item;
             };
 
             const exportNilaiExcel = () => {
-                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Tentukan parameter filter sebelum unduh data.');
+                if (!filter.value.globalKelas || groupedBab.value.length === 0) return alert('Data Bab/TP belum ada untuk diekspor.');
                 let wb = XLSX.utils.book_new();
                 let data = siswaTerfilterNilai.value.map((s, i) => {
-                    let obj = getNilaiObj(s.id, filter.value.babNilai);
-                    return { 'No': i+1, 'Nama': s.nama, 'Kelas': s.kelas, 'Formatif': obj.formatif, 'Sumatif': obj.sumatif, 'ASTS': obj.asts, 'ASAS': obj.asas };
+                    let row = { 'No': i+1, 'Nama': s.nama, 'Kelas': s.kelas };
+                    // Header Dinamis Formatif
+                    groupedBab.value.forEach(g => {
+                        g.tps.forEach((tp, idx) => {
+                            row[`Formatif BAB ${g.nomor} - TP ${idx+1}`] = getNilaiObj(s.id, tp.id).f1;
+                        });
+                    });
+                    // Header Dinamis Sumatif
+                    groupedBab.value.forEach(g => {
+                        row[`Sumatif BAB ${g.nomor}`] = getNilaiObj(s.id, g.tps[0].id).sumatif;
+                    });
+                    row['ASTS'] = getNilaiObj(s.id, groupedBab.value[0].tps[0].id).asts;
+                    row['ASAS'] = getNilaiObj(s.id, groupedBab.value[0].tps[0].id).asas;
+                    return row;
                 });
                 let ws = XLSX.utils.json_to_sheet(data);
-                XLSX.utils.book_append_sheet(wb, ws, "Nilai");
-                XLSX.writeFile(wb, `Rekap_Nilai_Kelas_${filter.value.globalKelas}_BabID_${filter.value.babNilai}.xlsx`);
+                XLSX.utils.book_append_sheet(wb, ws, "Nilai Matriks");
+                XLSX.writeFile(wb, `Rekap_Nilai_Matriks_Kelas_${filter.value.globalKelas}.xlsx`);
             };
 
             const downloadTemplateNilai = () => {
-                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Silakan pilih Acuan Bab terlebih dahulu!');
+                if (!filter.value.globalKelas || groupedBab.value.length === 0) return alert('Silakan buat Bab/TP terlebih dahulu di menu Bab & Tujuan Belajar!');
                 let wb = XLSX.utils.book_new();
                 let data = siswaTerfilterNilai.value.map(s => {
-                    return { 'ID_SISTEM': s.id, 'Nama Lengkap': s.nama, 'Formatif': 0, 'Sumatif': 0, 'ASTS': 0, 'ASAS': 0 };
+                    let row = { 'ID_SISTEM': s.id, 'Nama Lengkap': s.nama };
+                    groupedBab.value.forEach(g => {
+                        g.tps.forEach((tp, idx) => row[`Formatif BAB ${g.nomor} - TP ${idx+1}`] = '');
+                    });
+                    groupedBab.value.forEach(g => row[`Sumatif BAB ${g.nomor}`] = '');
+                    row['ASTS'] = '';
+                    row['ASAS'] = '';
+                    return row;
                 });
                 
                 if (data.length === 0) {
-                    data = [{ 'ID_SISTEM': 'ISI_ID_JIKA_ADA', 'Nama Lengkap': 'Siswa Belum Ada', 'Formatif': 0, 'Sumatif': 0, 'ASTS': 0, 'ASAS': 0 }];
+                    let dummy = { 'ID_SISTEM': 'ISI_ID_JIKA_ADA', 'Nama Lengkap': 'Siswa Belum Ada' };
+                    groupedBab.value.forEach(g => {
+                        g.tps.forEach((tp, idx) => dummy[`Formatif BAB ${g.nomor} - TP ${idx+1}`] = '');
+                    });
+                    groupedBab.value.forEach(g => dummy[`Sumatif BAB ${g.nomor}`] = '');
+                    dummy['ASTS'] = ''; dummy['ASAS'] = '';
+                    data = [dummy];
                 }
 
                 let ws = XLSX.utils.json_to_sheet(data);
@@ -2414,7 +2497,7 @@ service cloud.firestore {
             };
 
             const handleExcelImportNilai = (e) => {
-                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Pilih Bab terlebih dahulu sebelum mengimpor!');
+                if (!filter.value.globalKelas || groupedBab.value.length === 0) return alert('Buat Bab/TP terlebih dahulu sebelum mengimpor!');
                 const file = e.target.files[0];
                 if (!file) return;
                 
@@ -2432,15 +2515,26 @@ service cloud.firestore {
                                           siswaTerfilterNilai.value.find(s => s.nama.toLowerCase() === (row['Nama Lengkap'] || '').toLowerCase());
                             
                             if (student) {
-                                let obj = getNilaiObj(student.id, filter.value.babNilai);
-                                if (row['Formatif'] !== undefined) obj.formatif = Number(row['Formatif']);
-                                if (row['Sumatif'] !== undefined) obj.sumatif = Number(row['Sumatif']);
-                                if (row['ASTS'] !== undefined) obj.asts = Number(row['ASTS']);
-                                if (row['ASAS'] !== undefined) obj.asas = Number(row['ASAS']);
+                                // Ekstrak Formatif Dinamis
+                                groupedBab.value.forEach(g => {
+                                    g.tps.forEach((tp, idx) => {
+                                        let key = `Formatif BAB ${g.nomor} - TP ${idx+1}`;
+                                        if (row[key] !== undefined) getNilaiObj(student.id, tp.id).f1 = Number(row[key]);
+                                    });
+                                });
+                                // Ekstrak Sumatif Dinamis
+                                groupedBab.value.forEach(g => {
+                                    let key = `Sumatif BAB ${g.nomor}`;
+                                    if (row[key] !== undefined) getNilaiObj(student.id, g.tps[0].id).sumatif = Number(row[key]);
+                                });
+                                // Ekstrak ASTS & ASAS
+                                if (row['ASTS'] !== undefined) getNilaiObj(student.id, groupedBab.value[0].tps[0].id).asts = Number(row['ASTS']);
+                                if (row['ASAS'] !== undefined) getNilaiObj(student.id, groupedBab.value[0].tps[0].id).asas = Number(row['ASAS']);
+                                
                                 importedCount++;
                             }
                         });
-                        alert(`Berhasil mengimpor dan memperbarui nilai untuk ${importedCount} siswa!`);
+                        alert(`Berhasil mengimpor dan memperbarui nilai matriks untuk ${importedCount} siswa!`);
                         e.target.value = null; 
                     } catch (error) {
                         alert('Gagal membaca file Excel. Pastikan format tidak merubah struktur header template.');
@@ -2450,30 +2544,7 @@ service cloud.firestore {
             };
 
             const handleJsonImportNilai = () => {
-                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Pilih Bab terlebih dahulu!');
-                try {
-                    const parsed = JSON.parse(jsonImportNilai.value);
-                    if (Array.isArray(parsed)) {
-                        let importedCount = 0;
-                        parsed.forEach(row => {
-                            const student = siswaTerfilterNilai.value.find(s => s.nama.toLowerCase() === (row.nama || '').toLowerCase());
-                            if (student) {
-                                let obj = getNilaiObj(student.id, filter.value.babNilai);
-                                if (row.formatif !== undefined) obj.formatif = Number(row.formatif);
-                                if (row.sumatif !== undefined) obj.sumatif = Number(row.sumatif);
-                                if (row.asts !== undefined) obj.asts = Number(row.asts);
-                                if (row.asas !== undefined) obj.asas = Number(row.asas);
-                                importedCount++;
-                            }
-                        });
-                        alert(`Berhasil memproses & mencocokkan nilai untuk ${importedCount} siswa dari data JSON!`);
-                        jsonImportNilai.value = '';
-                    } else {
-                        alert('Format JSON harus berupa Array [{}, {}]');
-                    }
-                } catch (e) {
-                    alert('Format JSON tidak valid atau ada kesalahan sintaks!');
-                }
+                alert('Fitur Import JSON dinonaktifkan sementara. Silakan gunakan Import via Excel untuk memproses matriks tabel yang dinamis ini.');
             };
 
             // --- LOGIKA MODUL E: KHUSUS KELAS 6 ---
@@ -2503,8 +2574,31 @@ service cloud.firestore {
             const hitungRerataKomponen = (siswaId, komponen) => {
                 let records = datastore.value.nilai.filter(n => n.siswaId === siswaId);
                 if (records.length === 0) return 0;
-                let total = records.reduce((acc, curr) => acc + (curr[komponen] || 0), 0);
-                return Math.round(total / records.length);
+                
+                let total = 0;
+                let count = 0;
+                
+                // Jika sedang mencari Rerata Formatif, gabungkan seluruh nilai F1-F4 dari seluruh bab
+                if (komponen === 'formatif') {
+                    records.forEach(r => {
+                        if (typeof r.f1 === 'number') { total += r.f1; count++; }
+                        if (typeof r.f2 === 'number') { total += r.f2; count++; }
+                        if (typeof r.f3 === 'number') { total += r.f3; count++; }
+                        if (typeof r.f4 === 'number') { total += r.f4; count++; }
+                        // Backward compatibility
+                        if (typeof r.formatif === 'number') { total += r.formatif; count++; }
+                    });
+                } else {
+                    records.forEach(r => {
+                        if (typeof r[komponen] === 'number') {
+                            total += r[komponen];
+                            count++;
+                        }
+                    });
+                }
+                
+                if (count === 0) return 0;
+                return Math.round(total / count);
             };
 
             const hitungNilaiAkademis = (siswaId) => {
@@ -2759,11 +2853,38 @@ service cloud.firestore {
                         }));
                         break;
                     case 'Input Nilai':
-                        headers = ['No', 'Nama Siswa', 'Formatif', 'Sumatif', 'ASTS', 'ASAS'];
-                        keys = ['nama', 'formatif', 'sumatif', 'asts', 'asas'];
+                        if(groupedBab.value.length === 0) return alert('Buat Bab/TP terlebih dahulu untuk dirender ke dalam cetakan PDF.');
+                        
+                        let fHeaders = [];
+                        let fKeys = [];
+                        groupedBab.value.forEach(g => {
+                            g.tps.forEach((tp, idx) => {
+                                fHeaders.push(`F.B${g.nomor}.T${idx+1}`); // Format Ringkas Cetak PDF: F.B1.T1
+                                fKeys.push(`f_${tp.id}`);
+                            });
+                        });
+                        
+                        let sHeaders = [];
+                        let sKeys = [];
+                        groupedBab.value.forEach(g => {
+                            sHeaders.push(`S.B${g.nomor}`); // Format Ringkas Cetak PDF: S.B1
+                            sKeys.push(`s_${g.nomor}`);
+                        });
+                        
+                        headers = ['No', 'Nama Siswa', ...fHeaders, ...sHeaders, 'ASTS', 'ASAS'];
+                        keys = ['nama', ...fKeys, ...sKeys, 'asts', 'asas'];
                         rows = siswaTerfilterNilai.value.map(s => {
-                            let o = getNilaiObj(s.id, filter.value.babNilai);
-                            return { nama: s.nama, formatif: o.formatif, sumatif: o.sumatif, asts: o.asts, asas: o.asas };
+                            let obj = { nama: s.nama };
+                            // Populate data ke field per-id
+                            groupedBab.value.forEach(g => {
+                                g.tps.forEach(tp => {
+                                    obj[`f_${tp.id}`] = getNilaiObj(s.id, tp.id).f1 || '-';
+                                });
+                                obj[`s_${g.nomor}`] = getNilaiObj(s.id, g.tps[0].id).sumatif || '-';
+                            });
+                            obj.asts = getNilaiObj(s.id, groupedBab.value[0].tps[0].id).asts || '-';
+                            obj.asas = getNilaiObj(s.id, groupedBab.value[0].tps[0].id).asas || '-';
+                            return obj;
                         });
                         break;
                     case 'Rekap Presensi Semester':
@@ -3031,7 +3152,10 @@ service cloud.firestore {
                 copyRulesText,
                 copyFirebaseRules,
                 isSidebarOpen,
-                toggleSidebar
+                toggleSidebar,
+                groupedBab,
+                totalTps,
+                totalBabs
             };
         }
     }).mount('#app');
