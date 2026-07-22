@@ -1544,12 +1544,15 @@ service cloud.firestore {
 </div>
 
 <!-- APPLICATION CORE ARCHITECTURE (VUE ENGINE SCRIPT) -->
-<script>
-    const { createApp, ref, computed, watch, onMounted } = Vue;
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const { createApp, ref, computed, watch, onMounted } = window.Vue || Vue;
 
     createApp({
         setup() {
-            // --- DATA UTAMA APLIKASI (LOCALSTORAGE SYNC) ---
             const datastore = ref({
                 siswa: [],
                 presensi: {}, 
@@ -1560,7 +1563,6 @@ service cloud.firestore {
                 catatan: []
             });
 
-            // --- MENU SKELETON CONFIGURATION ---
             const currentMenu = ref('data-siswa');
             const menus = [
                 { id: 'data-siswa', name: 'Data Siswa', icon: 'fa-regular fa-id-badge' },
@@ -1576,10 +1578,11 @@ service cloud.firestore {
                 { id: 'rule-firebase', name: 'Rule Firebase Console', icon: 'fa-solid fa-shield-halved' }
             ];
 
-            // --- CONFIG KONFIGURASI GLOBAL ---
             const settings = ref({
                 namaSekolah: 'SDN 1 Menteng',
                 alamatSekolah: 'Jl. Menteng Raya No. 1, Jakarta',
+                namaKepsek: '',
+                nipKepsek: '',
                 namaGuru: 'Ahmad Subarjo, S.Pd.',
                 nipGuru: '198412032009041002',
                 tahunAjaran: '2025/2026',
@@ -1595,7 +1598,6 @@ service cloud.firestore {
                 firebase: { apiKey: '', authDomain: '', databaseURL: '', projectId: '', storageBucket: '', messagingSenderId: '', appId: '', measurementId: '' }
             });
 
-            // --- PRESET PALET WARNA UNTUK SIDEBAR ---
             const colorPresets = [
                 { name: '🌸 Pink Muda', color: '#f472b6' },
                 { name: '🍎 Crimson Red', color: '#b91c1c' },
@@ -1606,7 +1608,6 @@ service cloud.firestore {
                 { name: '🍊 Tangerine', color: '#ea580c' }
             ];
 
-            // --- FORM INPUT & FILTERING TRANSIENT STATE ---
             const filter = ref({
                 globalKelas: '1A', 
                 kelasBab: '1A',
@@ -1620,7 +1621,6 @@ service cloud.firestore {
                 kelasRekap: '1A'
             });
 
-            // --- SISTEM AUTENTIKASI LOKAL & MULTI-TENANT ---
             const authMode = ref('login');
             const currentUser = ref(localStorage.getItem('eunoia_active_user') || '');
             const isLoggedIn = ref(localStorage.getItem('eunoia_session') === 'active' && currentUser.value !== '');
@@ -1633,254 +1633,122 @@ service cloud.firestore {
             const showPass = ref({ auth: false, lama: false, baru: false, konfirmasi: false });
             
             const showLogoutModal = ref(false);
-
-            // STATE UNTUK TOGGLE SIDEBAR
             const isSidebarOpen = ref(true);
-            const toggleSidebar = () => {
-                isSidebarOpen.value = !isSidebarOpen.value;
-            };
+
+            const toggleSidebar = () => { isSidebarOpen.value = !isSidebarOpen.value; };
 
             const getDefaultSettings = () => ({
-                namaSekolah: 'SDN 1 Menteng',
-                alamatSekolah: 'Jl. Menteng Raya No. 1, Jakarta',
-                namaGuru: 'Ahmad Subarjo, S.Pd.',
-                nipGuru: '198412032009041002',
-                tahunAjaran: '2025/2026',
-                semester: 'Ganjil',
-                mapelAktif: 'Bahasa Inggris',
-                listMapel: ['Bahasa Inggris', 'Matematika', 'Bahasa Indonesia', 'IPAS', 'Pendidikan Pancasila'],
+                namaSekolah: 'SDN 1 Menteng', alamatSekolah: 'Jl. Menteng Raya No. 1, Jakarta', namaKepsek: '', nipKepsek: '',
+                namaGuru: 'Ahmad Subarjo, S.Pd.', nipGuru: '198412032009041002', tahunAjaran: '2025/2026', semester: 'Ganjil',
+                mapelAktif: 'Bahasa Inggris', listMapel: ['Bahasa Inggris', 'Matematika', 'Bahasa Indonesia', 'IPAS', 'Pendidikan Pancasila'],
                 listKelas: ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'],
-                themeColor: '#f472b6', 
-                parentSpreadsheetUrl: '',
-                username: 'eunoia',
-                password: '12345',
+                themeColor: '#f472b6', parentSpreadsheetUrl: '', username: 'eunoia', password: '12345',
                 bobot: { formatif: 30, sumatif: 40, asts: 15, asas: 15 },
                 firebase: { apiKey: '', authDomain: '', databaseURL: '', projectId: '', storageBucket: '', messagingSenderId: '', appId: '', measurementId: '' }
             });
 
             const handleAuth = () => {
-                authForm.value.error = '';
-                authForm.value.success = '';
-                
+                authForm.value.error = ''; authForm.value.success = '';
                 if (authMode.value === 'login') {
                     const user = authForm.value.username.trim();
                     const pass = authForm.value.password;
-                    if(!user || !pass) {
-                        authForm.value.error = 'Username dan Password wajib diisi!';
-                        return;
-                    }
+                    if(!user || !pass) { authForm.value.error = 'Username dan Password wajib diisi!'; return; }
 
                     let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
                     let validPass = '12345';
-                    if (usersDb[user]) {
-                        validPass = usersDb[user].password;
-                    } else if (user === 'eunoia' && pass === '12345') {
-                        // Fallback default akun
-                    } else {
-                        authForm.value.error = 'Username atau Password salah atau belum terdaftar!';
-                        return;
-                    }
+                    if (usersDb[user]) { validPass = usersDb[user].password; } 
+                    else if (user === 'eunoia' && pass === '12345') { /* default */ } 
+                    else { authForm.value.error = 'Username atau Password salah atau belum terdaftar!'; return; }
 
                     if (pass !== validPass && !(user === 'eunoia' && pass === '12345')) {
-                        authForm.value.error = 'Username atau Password salah!';
-                        return;
+                        authForm.value.error = 'Username atau Password salah!'; return;
                     }
 
-                    currentUser.value = user;
-                    isLoggedIn.value = true;
+                    currentUser.value = user; isLoggedIn.value = true;
                     localStorage.setItem('eunoia_session', 'active');
                     localStorage.setItem('eunoia_active_user', user);
                     localStorage.setItem('eunoia_last_user', user);
-                    
                     authForm.value.password = ''; 
-                    
                     loadDataForUser(user);
                 } else if (authMode.value === 'register') {
-                    const user = authForm.value.username.trim();
-                    const pass = authForm.value.password;
-                    const email = authForm.value.email.trim();
-                    const nama = authForm.value.nama.trim();
+                    const user = authForm.value.username.trim(); const pass = authForm.value.password;
+                    const email = authForm.value.email.trim(); const nama = authForm.value.nama.trim();
 
-                    if(!user || !pass || !email || !nama) {
-                        authForm.value.error = 'Semua field (Nama, Email, Username, Password) wajib diisi!';
-                        return;
-                    }
+                    if(!user || !pass || !email || !nama) { authForm.value.error = 'Semua field wajib diisi!'; return; }
 
                     let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
-                    if (usersDb[user]) {
-                        authForm.value.error = 'Username sudah terdaftar. Silakan gunakan username lain.';
-                        return;
-                    }
-                    
-                    // Cek email duplicate
-                    for (const key in usersDb) {
-                        if (usersDb[key].email === email) {
-                            authForm.value.error = 'Email sudah terdaftar. Silakan gunakan email lain atau gunakan fitur Lupa Sandi.';
-                            return;
-                        }
-                    }
+                    if (usersDb[user]) { authForm.value.error = 'Username sudah terdaftar.'; return; }
+                    for (const key in usersDb) { if (usersDb[key].email === email) { authForm.value.error = 'Email sudah terdaftar.'; return; } }
 
-                    // Simulasi Kirim OTP
                     tempOtp.value = Math.floor(100000 + Math.random() * 900000).toString();
                     tempUserData.value = { user, pass, email, nama };
-                    authMode.value = 'verify-register';
-                    authForm.value.verificationCode = '';
-                    
-                    alert(`[SIMULASI SISTEM EMAIL]\n\nKode verifikasi pendaftaran Anda telah dikirim ke email ${email}.\n\nKODE OTP ANDA: ${tempOtp.value}\n\n(Catatan: Karena aplikasi berbasis front-end tanpa server, kode ditampilkan via peringatan ini)`);
+                    authMode.value = 'verify-register'; authForm.value.verificationCode = '';
+                    alert(`[SIMULASI SISTEM EMAIL]\n\nKode verifikasi Anda:\nKODE OTP: ${tempOtp.value}`);
                     authForm.value.success = `Kode OTP telah dikirim ke email ${email}.`;
                 }
             };
             
             const verifyRegister = () => {
-                authForm.value.error = '';
-                authForm.value.success = '';
-                if (authForm.value.verificationCode !== tempOtp.value) {
-                    authForm.value.error = 'Kode OTP tidak valid atau salah!';
-                    return;
-                }
+                authForm.value.error = ''; authForm.value.success = '';
+                if (authForm.value.verificationCode !== tempOtp.value) { authForm.value.error = 'Kode OTP tidak valid!'; return; }
                 
                 let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
                 let data = tempUserData.value;
-                
-                usersDb[data.user] = {
-                    password: data.pass,
-                    nama: data.nama || data.user,
-                    email: data.email,
-                    createdAt: new Date().toISOString()
-                };
+                usersDb[data.user] = { password: data.pass, nama: data.nama || data.user, email: data.email, createdAt: new Date().toISOString() };
                 localStorage.setItem('eunoia_users_db', JSON.stringify(usersDb));
 
                 const defaultSet = getDefaultSettings();
-                defaultSet.namaGuru = data.nama || data.user;
-                defaultSet.username = data.user;
-                defaultSet.password = data.pass;
+                defaultSet.namaGuru = data.nama || data.user; defaultSet.username = data.user; defaultSet.password = data.pass;
                 localStorage.setItem(`eunoia_settings_${data.user}`, JSON.stringify(defaultSet));
 
-                authForm.value.success = 'Verifikasi dan Pendaftaran berhasil! Silakan masuk.';
-                authMode.value = 'login';
-                authForm.value.password = '';
-                tempOtp.value = '';
-                tempUserData.value = null;
+                authForm.value.success = 'Verifikasi berhasil! Silakan masuk.';
+                authMode.value = 'login'; authForm.value.password = ''; tempOtp.value = ''; tempUserData.value = null;
             };
 
             const requestForgotPassword = () => {
-                authForm.value.error = '';
-                authForm.value.success = '';
+                authForm.value.error = ''; authForm.value.success = '';
                 const email = authForm.value.email.trim();
-                
-                if (!email) {
-                    authForm.value.error = 'Masukkan email yang terdaftar!';
-                    return;
-                }
+                if (!email) { authForm.value.error = 'Masukkan email!'; return; }
                 
                 let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
                 let foundUser = null;
-                
-                for (const key in usersDb) {
-                    if (usersDb[key].email === email) {
-                        foundUser = key;
-                        break;
-                    }
-                }
-                
-                if (!foundUser) {
-                    authForm.value.error = 'Email tidak ditemukan dalam sistem kami.';
-                    return;
-                }
+                for (const key in usersDb) { if (usersDb[key].email === email) { foundUser = key; break; } }
+                if (!foundUser) { authForm.value.error = 'Email tidak ditemukan.'; return; }
                 
                 tempUserData.value = { user: foundUser };
                 tempOtp.value = Math.floor(100000 + Math.random() * 900000).toString();
-                authMode.value = 'reset-password';
-                authForm.value.verificationCode = '';
-                authForm.value.password = ''; // using this as new password field
-                
-                alert(`[SIMULASI SISTEM EMAIL]\n\nKode reset kata sandi telah dikirim ke email ${email}.\n\nKODE OTP ANDA: ${tempOtp.value}`);
-                authForm.value.success = `Kode OTP untuk reset sandi telah dikirim ke email ${email}.`;
+                authMode.value = 'reset-password'; authForm.value.verificationCode = ''; authForm.value.password = ''; 
+                alert(`[SIMULASI SISTEM EMAIL]\n\nKode reset sandi Anda:\nKODE OTP: ${tempOtp.value}`);
+                authForm.value.success = `Kode OTP terkirim ke ${email}.`;
             };
             
             const processResetPassword = () => {
-                authForm.value.error = '';
-                authForm.value.success = '';
-                if (authForm.value.verificationCode !== tempOtp.value) {
-                    authForm.value.error = 'Kode OTP tidak valid!';
-                    return;
-                }
-                
-                if (!authForm.value.password || authForm.value.password.length < 5) {
-                    authForm.value.error = 'Sandi baru wajib diisi minimal 5 karakter!';
-                    return;
-                }
+                authForm.value.error = ''; authForm.value.success = '';
+                if (authForm.value.verificationCode !== tempOtp.value) { authForm.value.error = 'Kode OTP tidak valid!'; return; }
+                if (!authForm.value.password || authForm.value.password.length < 5) { authForm.value.error = 'Sandi min 5 karakter!'; return; }
                 
                 let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
                 let usernameToReset = tempUserData.value.user;
-                
                 usersDb[usernameToReset].password = authForm.value.password;
                 localStorage.setItem('eunoia_users_db', JSON.stringify(usersDb));
                 
-                // Update local settings too if exists
                 let localSetStr = localStorage.getItem(`eunoia_settings_${usernameToReset}`);
                 if (localSetStr) {
-                    let localSet = JSON.parse(localSetStr);
-                    localSet.password = authForm.value.password;
+                    let localSet = JSON.parse(localSetStr); localSet.password = authForm.value.password;
                     localStorage.setItem(`eunoia_settings_${usernameToReset}`, JSON.stringify(localSet));
                 }
                 
-                authForm.value.success = 'Kata sandi berhasil diatur ulang! Silakan masuk.';
-                authMode.value = 'login';
-                authForm.value.password = '';
-                tempOtp.value = '';
-                tempUserData.value = null;
+                authForm.value.success = 'Kata sandi diatur ulang! Silakan masuk.';
+                authMode.value = 'login'; authForm.value.password = ''; tempOtp.value = ''; tempUserData.value = null;
             };
 
-            const prosesGantiSandi = () => {
-                firebaseStatus.value = {show:false}; // reset notification if any
-                if (!formGantiSandi.value.lama || !formGantiSandi.value.baru || !formGantiSandi.value.konfirmasi) {
-                    return showFirebaseStatus('Semua kolom sandi wajib diisi!', 'error');
-                }
-                
-                if (formGantiSandi.value.baru !== formGantiSandi.value.konfirmasi) {
-                    return showFirebaseStatus('Konfirmasi sandi baru tidak cocok!', 'error');
-                }
-                
-                let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
-                let activeDb = usersDb[currentUser.value];
-                
-                if (!activeDb) {
-                    // Fallback create data for hardcoded 'eunoia' admin if they try to change it for the first time
-                    if (currentUser.value === 'eunoia') {
-                        activeDb = { password: '12345', nama: 'Eunoia Admin', email: '' };
-                        usersDb['eunoia'] = activeDb;
-                    } else {
-                        return showFirebaseStatus('Gagal menemukan data pengguna.', 'error');
-                    }
-                }
-                
-                if (activeDb.password !== formGantiSandi.value.lama) {
-                    return showFirebaseStatus('Sandi lama yang Anda masukkan salah!', 'error');
-                }
-                
-                activeDb.password = formGantiSandi.value.baru;
-                localStorage.setItem('eunoia_users_db', JSON.stringify(usersDb));
-                
-                settings.value.password = formGantiSandi.value.baru; 
-                saveToLocal();
-                
-                formGantiSandi.value = { lama: '', baru: '', konfirmasi: '' };
-                showFirebaseStatus('Kata sandi berhasil diperbarui!', 'success');
-            };
-
-            const handleLogout = () => {
-                showLogoutModal.value = true;
-            };
+            const handleLogout = () => { showLogoutModal.value = true; };
 
             const konfirmasiLogout = () => {
-                isLoggedIn.value = false;
-                currentUser.value = '';
-                localStorage.removeItem('eunoia_session');
-                localStorage.removeItem('eunoia_active_user');
+                if (unsubFirestore) unsubFirestore(); // Matikan listen cloud
+                isLoggedIn.value = false; currentUser.value = '';
+                localStorage.removeItem('eunoia_session'); localStorage.removeItem('eunoia_active_user');
                 currentMenu.value = 'data-siswa'; 
-                
-                // Bersihkan memory virtual agar tidak mengintip data orang lain
                 datastore.value = { siswa: [], presensi: {}, bab: [], nilai: [], ujian6: [], jurnal: [], catatan: [] };
                 settings.value = getDefaultSettings();
                 showLogoutModal.value = false;
@@ -1889,51 +1757,31 @@ service cloud.firestore {
             const loadDataForUser = (user) => {
                 const localStore = localStorage.getItem(`eunoia_datastore_${user}`);
                 const localSet = localStorage.getItem(`eunoia_settings_${user}`);
-                
                 if (localStore) datastore.value = JSON.parse(localStore);
                 else datastore.value = { siswa: [], presensi: {}, bab: [], nilai: [], ujian6: [], jurnal: [], catatan: [] };
-                
                 if (localSet) settings.value = JSON.parse(localSet);
                 else settings.value = getDefaultSettings();
-                
                 if (datastore.value.bab.length > 0) filter.value.babNilai = datastore.value.bab[0].id;
             };
 
-            const showImportSiswa = ref(false);
-            const jsonImportSiswa = ref('');
-            
-            const showImportNilai = ref(false);
-            const jsonImportNilai = ref('');
+            // --- VARIABEL & STATE FIREBASE ---
+            let dbInstance = null;
+            let unsubFirestore = null;
+            let isReceivingFromCloud = false;
+            let syncTimeout = null;
 
-            const presensiViewMode = ref('harian');
-
-            const formSiswaCepat = ref({ nis: '', nisn: '', nama: '', ttl: '' });
-            const formInput = ref({ newMapel: '', newKelas: '' });
-
-            // --- MODAL WINDOW CONTROL ---
-            const modal = ref({
-                siswa: { show: false, data: { id: null, nis: '', nisn: '', nama: '', ttl: '' } },
-                bab: { show: false, isEdit: false, data: { id: null, nomor: null, nama: '', tp: '', kelas: '', mapel: '' } },
-                jurnal: { show: false, isEdit: false, data: { id: null, tanggal: '', kelas: '', materi: '', pencapaian: '', hambatan: '' } },
-                catatan: { show: false, isEdit: false, filterKelas: '', data: { id: null, siswaId: '', tanggal: '', jenis: 'Tambah', poin: 1, narasi: '' } }
-            });
-
-            // --- STATE & FUNGSI FIREBASE CLOUD HUB (BARU) ---
             const isFirebaseTesting = ref(false);
             const isFirebaseConnecting = ref(false);
             const isFirebaseConnected = ref(false);
             const isSyncing = ref(false);
             const firebaseStatus = ref({ show: false, message: '', bgClass: '', iconClass: '' });
-
-            // State & Logika UI Pilihan Sinkronisasi (Baru)
+            
             const isSyncActive = ref(localStorage.getItem('eunoia_sync_active') === 'true');
             const inputSyncCode = ref('');
 
-            // Generate Device ID & Sync Code untuk UI Sinkronisasi
             const generateDeviceId = () => Math.random().toString(36).substring(2, 10).toUpperCase() + '...';
             const generateSyncCode = () => {
-                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-                let code = '';
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = '';
                 for(let i=0; i<7; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
                 return code.substring(0,3) + '-' + code.substring(3);
             };
@@ -1943,49 +1791,6 @@ service cloud.firestore {
 
             if (!localStorage.getItem('eunoia_device_id')) localStorage.setItem('eunoia_device_id', deviceId.value);
             if (!localStorage.getItem('eunoia_sync_code')) localStorage.setItem('eunoia_sync_code', syncCode.value);
-
-            const aktifkanPerangkatUtama = () => {
-                isSyncActive.value = true;
-                localStorage.setItem('eunoia_sync_active', 'true');
-                showFirebaseStatus('Perangkat ini berhasil diatur sebagai Master. Silakan gunakan Kode Akses yang tersedia.', 'success');
-            };
-
-            const hubungkanKePerangkatLain = () => {
-                const code = inputSyncCode.value.trim().toUpperCase();
-                if (!code || code.length < 5) {
-                    return showFirebaseStatus('Format Kode Akses tidak valid. Silakan periksa kembali!', 'error');
-                }
-                syncCode.value = code;
-                localStorage.setItem('eunoia_sync_code', code);
-                isSyncActive.value = true;
-                localStorage.setItem('eunoia_sync_active', 'true');
-                inputSyncCode.value = ''; // Reset input form
-                showFirebaseStatus('Berhasil dihubungkan! Identitas perangkat sinkron dengan Master.', 'success');
-            };
-
-            const putuskanSinkronisasi = () => {
-                if (confirm('Apakah Anda yakin ingin memutus koneksi sinkronisasi perangkat ini?')) {
-                    isFirebaseConnected.value = false;
-                    isSyncing.value = false;
-                    isSyncActive.value = false;
-                    localStorage.setItem('eunoia_sync_active', 'false');
-                    showFirebaseStatus('Koneksi sinkronisasi diputus. Aplikasi kembali ke mode penyimpanan luring.', 'info');
-                }
-            };
-
-            const copySyncCode = () => {
-                const textArea = document.createElement("textarea");
-                textArea.value = syncCode.value;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    showFirebaseStatus('Kode sinkronisasi berhasil disalin ke papan klip!', 'success');
-                } catch (err) {}
-                document.body.removeChild(textArea);
-            };
-
-            const showPrintPreview = ref(false);
 
             const showFirebaseStatus = (msg, type) => {
                 firebaseStatus.value.message = msg;
@@ -2000,250 +1805,273 @@ service cloud.firestore {
                     firebaseStatus.value.bgClass = 'bg-blue-50 text-blue-700 border border-blue-200';
                     firebaseStatus.value.iconClass = 'fa-solid fa-circle-info text-blue-500';
                 }
-                // Sembunyikan notifikasi perlahan setelah 5 detik
                 setTimeout(() => { firebaseStatus.value.show = false; }, 5000);
             };
 
-            const simpanKonfigurasiFirebase = () => {
-                saveToLocal();
-                showFirebaseStatus('Kredensial konfigurasi Firebase berhasil disimpan ke memori lokal.', 'success');
-            };
+            const simpanKonfigurasiFirebase = () => { saveToLocal(); showFirebaseStatus('Kredensial Firebase disimpan ke memori.', 'success'); };
 
-            const ujiKoneksiFirebase = () => {
-                if (!settings.value.firebase.apiKey || !settings.value.firebase.projectId) {
-                    showFirebaseStatus('Gagal! API Key dan Project ID Firebase wajib diisi untuk melakukan pengujian.', 'error');
-                    return;
+            const ujiKoneksiFirebase = async () => {
+                const isImmersive = typeof __firebase_config !== 'undefined';
+                if (!settings.value.firebase.apiKey && !isImmersive) {
+                    showFirebaseStatus('API Key Firebase wajib diisi atau jalankan di Cloud Workspace.', 'error'); return;
                 }
                 isFirebaseTesting.value = true;
                 showFirebaseStatus('Melakukan ping ke endpoint Firebase Hub...', 'info');
-                setTimeout(() => {
+                try {
+                    let config = isImmersive ? JSON.parse(__firebase_config) : { apiKey: settings.value.firebase.apiKey, projectId: settings.value.firebase.projectId };
+                    const tempApp = initializeApp(config, 'TestApp' + Date.now());
                     isFirebaseTesting.value = false;
-                    showFirebaseStatus('Ping berhasil! Hub Gateway merespons (Status: OK).', 'success');
-                }, 1500);
+                    showFirebaseStatus('Ping berhasil! Kredensial Firebase valid (Status: OK).', 'success');
+                } catch (error) {
+                    isFirebaseTesting.value = false;
+                    showFirebaseStatus('Ping gagal: ' + error.message, 'error');
+                }
             };
 
-            const hubungkanFirebase = () => {
-                if (!settings.value.firebase.apiKey || !settings.value.firebase.projectId) {
-                    showFirebaseStatus('Gagal menghubungkan! Mohon lengkapi parameter Firebase.', 'error');
-                    return;
+            const hubungkanFirebase = async (isSilent = false) => {
+                const isImmersive = typeof __firebase_config !== 'undefined';
+                if (!settings.value.firebase.apiKey && !isImmersive) {
+                    if (!isSilent) showFirebaseStatus('Gagal menghubungkan! Mohon lengkapi parameter Firebase.', 'error'); return;
                 }
                 isFirebaseConnecting.value = true;
-                showFirebaseStatus('Membuat sesi koneksi aman (WSS) ke Gateway Server...', 'info');
-                setTimeout(() => {
-                    isFirebaseConnecting.value = false;
-                    isFirebaseConnected.value = true;
-                    showFirebaseStatus('Koneksi Established! Sistem telah siap untuk Sinkronisasi Awan.', 'success');
-                }, 2000);
-            };
+                if (!isSilent) showFirebaseStatus('Membuat sesi koneksi aman (WSS) ke Gateway Server...', 'info');
+                
+                try {
+                    let config = isImmersive ? JSON.parse(__firebase_config) : {
+                        apiKey: settings.value.firebase.apiKey, authDomain: settings.value.firebase.authDomain,
+                        projectId: settings.value.firebase.projectId, storageBucket: settings.value.firebase.storageBucket,
+                        messagingSenderId: settings.value.firebase.messagingSenderId, appId: settings.value.firebase.appId
+                    };
 
-            const sinkronisasiAwan = () => {
-                if (!isFirebaseConnected.value) {
-                    showFirebaseStatus('Hubungkan Firebase terlebih dahulu sebelum memicu proses sinkronisasi awan.', 'error');
-                    return;
+                    const app = initializeApp(config);
+                    const auth = getAuth(app);
+                    dbInstance = getFirestore(app);
+
+                    if (typeof __initial_auth_token !== 'undefined') { await signInWithCustomToken(auth, __initial_auth_token); } 
+                    else { await signInAnonymously(auth); }
+
+                    isFirebaseConnecting.value = false; isFirebaseConnected.value = true;
+                    if (!isSilent) showFirebaseStatus('Koneksi Established! Sistem telah siap untuk Sinkronisasi Awan.', 'success');
+                    
+                    if (isSilent && isSyncActive.value) { mulaiListenCloud(); }
+                } catch (error) {
+                    console.error(error); isFirebaseConnecting.value = false;
+                    if (!isSilent) showFirebaseStatus('Koneksi Gagal: ' + error.message, 'error');
                 }
-                isSyncing.value = true;
-                showFirebaseStatus('Mengunggah & memvalidasi metadata Multi-Device ke Cloud...', 'info');
-                setTimeout(() => {
-                    isSyncing.value = false;
-                    showFirebaseStatus('Sinkronisasi Awan 100% Selesai. Data EUNOIA Anda kini mutakhir di semua perangkat!', 'success');
-                }, 2500);
             };
 
+            const mulaiListenCloud = (kodeSync = syncCode.value) => {
+                if (!dbInstance) return;
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'eunoia-app';
+                const syncCollection = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'sync_sessions');
+                const docRef = doc(syncCollection, kodeSync);
+
+                if (unsubFirestore) unsubFirestore();
+                
+                unsubFirestore = onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data.lastUpdatedBy !== deviceId.value) {
+                            isReceivingFromCloud = true;
+                            if (data.datastore) datastore.value = data.datastore;
+                            if (data.settings) {
+                                const incomingSettings = data.settings;
+                                incomingSettings.firebase = settings.value.firebase;
+                                settings.value = incomingSettings;
+                            }
+                            showFirebaseStatus('Menerima pembaruan data dari perangkat lain secara real-time.', 'info');
+                            setTimeout(() => { isReceivingFromCloud = false; }, 1000);
+                        }
+                    }
+                }, (error) => { console.error("Listen failed:", error); });
+            };
+
+            const triggerUploadKeCloud = () => {
+                if (!isFirebaseConnected.value || !isSyncActive.value || isReceivingFromCloud || !dbInstance) return;
+                if (syncTimeout) clearTimeout(syncTimeout);
+                syncTimeout = setTimeout(async () => {
+                    try {
+                        const appId = typeof __app_id !== 'undefined' ? __app_id : 'eunoia-app';
+                        const syncCollection = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'sync_sessions');
+                        const docRef = doc(syncCollection, syncCode.value);
+                        
+                        await setDoc(docRef, {
+                            datastore: datastore.value, settings: settings.value,
+                            lastUpdated: new Date().toISOString(), lastUpdatedBy: deviceId.value
+                        }, { merge: true });
+                    } catch (error) { console.error("Gagal sinkron di background:", error); }
+                }, 1500); 
+            };
+
+            const sinkronisasiAwan = async () => {
+                if (!isFirebaseConnected.value) { showFirebaseStatus('Hubungkan Firebase terlebih dahulu!', 'error'); return; }
+                isSyncing.value = true; showFirebaseStatus('Mengunggah & memvalidasi metadata Multi-Device...', 'info');
+                
+                try {
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'eunoia-app';
+                    const syncCollection = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'sync_sessions');
+                    const docRef = doc(syncCollection, syncCode.value);
+                    
+                    await setDoc(docRef, { datastore: datastore.value, settings: settings.value, lastUpdated: new Date().toISOString(), lastUpdatedBy: deviceId.value, masterId: deviceId.value });
+
+                    mulaiListenCloud(); isSyncing.value = false;
+                    showFirebaseStatus('Sinkronisasi Awan Selesai. Data mutakhir di semua perangkat!', 'success');
+                } catch (error) { console.error(error); isSyncing.value = false; showFirebaseStatus('Gagal: ' + error.message, 'error'); }
+            };
+
+            const aktifkanPerangkatUtama = () => {
+                isSyncActive.value = true; localStorage.setItem('eunoia_sync_active', 'true');
+                showFirebaseStatus('Perangkat diatur sebagai Master. Silakan gunakan Kode Akses di perangkat lain.', 'success');
+            };
+
+            const hubungkanKePerangkatLain = async () => {
+                const code = inputSyncCode.value.trim().toUpperCase();
+                if (!code || code.length < 5) return showFirebaseStatus('Format Kode Akses tidak valid!', 'error');
+                if (!isFirebaseConnected.value) return showFirebaseStatus('Hubungkan Firebase terlebih dahulu di panel pengaturan bawah!', 'error');
+
+                showFirebaseStatus('Mencari sesi sinkronisasi dari Master...', 'info');
+                try {
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'eunoia-app';
+                    const syncCollection = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'sync_sessions');
+                    const docRef = doc(syncCollection, code);
+                    const docSnap = await getDoc(docRef);
+                    
+                    if (!docSnap.exists()) return showFirebaseStatus('Sesi sinkronisasi tidak ditemukan. Periksa kembali kode!', 'error');
+                    
+                    syncCode.value = code; localStorage.setItem('eunoia_sync_code', code);
+                    isSyncActive.value = true; localStorage.setItem('eunoia_sync_active', 'true');
+                    inputSyncCode.value = '';
+
+                    isReceivingFromCloud = true;
+                    if (docSnap.data().datastore) datastore.value = docSnap.data().datastore;
+                    if (docSnap.data().settings) {
+                        const incomingSettings = docSnap.data().settings;
+                        incomingSettings.firebase = settings.value.firebase;
+                        settings.value = incomingSettings;
+                    }
+                    setTimeout(() => { isReceivingFromCloud = false; }, 1000);
+                    mulaiListenCloud(code);
+                    showFirebaseStatus('Berhasil dihubungkan! Identitas perangkat sinkron dengan Master secara Real-time.', 'success');
+                } catch (error) { console.error(error); showFirebaseStatus('Gagal terhubung: ' + error.message, 'error'); }
+            };
+
+            const putuskanSinkronisasi = () => {
+                if (confirm('Yakin memutus koneksi sinkronisasi perangkat ini?')) {
+                    if (unsubFirestore) { unsubFirestore(); unsubFirestore = null; }
+                    isFirebaseConnected.value = false; isSyncing.value = false; isSyncActive.value = false;
+                    localStorage.setItem('eunoia_sync_active', 'false');
+                    showFirebaseStatus('Koneksi sinkronisasi diputus. Aplikasi kembali ke mode penyimpanan luring.', 'info');
+                }
+            };
+
+            const copySyncCode = () => {
+                const textArea = document.createElement("textarea"); textArea.value = syncCode.value;
+                document.body.appendChild(textArea); textArea.select();
+                try { document.execCommand('copy'); showFirebaseStatus('Kode sinkronisasi berhasil disalin!', 'success'); } catch (err) {}
+                document.body.removeChild(textArea);
+            };
+
+            const showImportSiswa = ref(false); const jsonImportSiswa = ref('');
+            const showImportNilai = ref(false); const jsonImportNilai = ref('');
+            const presensiViewMode = ref('harian');
+            const formSiswaCepat = ref({ nis: '', nisn: '', nama: '', ttl: '' });
+            const formInput = ref({ newMapel: '', newKelas: '' });
+
+            const modal = ref({
+                siswa: { show: false, data: { id: null, nis: '', nisn: '', nama: '', ttl: '' } },
+                bab: { show: false, isEdit: false, data: { id: null, nomor: null, nama: '', tp: '', kelas: '', mapel: '' } },
+                jurnal: { show: false, isEdit: false, data: { id: null, tanggal: '', kelas: '', materi: '', pencapaian: '', hambatan: '' } },
+                catatan: { show: false, isEdit: false, filterKelas: '', data: { id: null, siswaId: '', tanggal: '', jenis: 'Tambah', poin: 1, narasi: '' } }
+            });
+
+            const showPrintPreview = ref(false);
             const printMeta = ref({ judul: '', fokusKelas: '', headers: [], keys: [], rows: [] });
 
             const listRombel = computed(() => {
-                if (!settings.value.listKelas || settings.value.listKelas.length === 0) {
-                    return ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'];
-                }
+                if (!settings.value.listKelas || settings.value.listKelas.length === 0) return ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'];
                 return settings.value.listKelas;
             });
 
             const getBrightness = (hexColor) => {
                 const hex = hexColor.replace('#', '');
-                const r = parseInt(hex.substr(0, 2), 16);
-                const g = parseInt(hex.substr(2, 2), 16);
-                const b = parseInt(hex.substr(4, 2), 16);
-                return ((r * 299) + (g * 587) + (b * 114)) / 1000;
+                return ((parseInt(hex.substr(0, 2), 16) * 299) + (parseInt(hex.substr(2, 2), 16) * 587) + (parseInt(hex.substr(4, 2), 16) * 114)) / 1000;
             };
 
-            const getPresetTextClass = (color) => {
-                const yiq = getBrightness(color);
-                return (yiq >= 140) ? 'text-gray-900' : 'text-white';
-            };
-
-            const sidebarTextColor = computed(() => {
-                const yiq = getBrightness(settings.value.themeColor);
-                return (yiq >= 140) ? 'text-gray-900' : 'text-white';
-            });
-
-            const totalBobot = computed(() => {
-                return (settings.value.bobot.formatif || 0) + (settings.value.bobot.sumatif || 0) + (settings.value.bobot.asts || 0) + (settings.value.bobot.asas || 0);
-            });
+            const getPresetTextClass = (color) => (getBrightness(color) >= 140) ? 'text-gray-900' : 'text-white';
+            const sidebarTextColor = computed(() => (getBrightness(settings.value.themeColor) >= 140) ? 'text-gray-900' : 'text-white');
+            const totalBobot = computed(() => (settings.value.bobot.formatif || 0) + (settings.value.bobot.sumatif || 0) + (settings.value.bobot.asts || 0) + (settings.value.bobot.asas || 0));
 
             const saveToLocal = () => {
-                if(!currentUser.value) return; // Mencegah data tersimpan di luar brankas user
+                if(!currentUser.value) return;
                 localStorage.setItem(`eunoia_datastore_${currentUser.value}`, JSON.stringify(datastore.value));
                 localStorage.setItem(`eunoia_settings_${currentUser.value}`, JSON.stringify(settings.value));
             };
 
             onMounted(() => {
-                if (isLoggedIn.value && currentUser.value) {
-                    loadDataForUser(currentUser.value);
-                }
+                if (isLoggedIn.value && currentUser.value) { loadDataForUser(currentUser.value); }
+                if (isSyncActive.value) { setTimeout(() => { hubungkanFirebase(true); }, 1000); }
             });
 
-            watch(datastore, () => saveToLocal(), { deep: true });
-            watch(settings, () => saveToLocal(), { deep: true });
+            watch(datastore, () => { saveToLocal(); triggerUploadKeCloud(); }, { deep: true });
+            watch(settings, () => { saveToLocal(); triggerUploadKeCloud(); }, { deep: true });
 
             watch(() => filter.value.globalKelas, (newKelas) => {
-                const availableBab = datastore.value.bab.filter(b => 
-                    (b.kelas === newKelas || (!b.kelas && newKelas === '1A')) &&
-                    (b.mapel === settings.value.mapelAktif || !b.mapel)
-                );
-                if (availableBab.length > 0) {
-                    filter.value.babNilai = availableBab[0].id;
-                } else {
-                    filter.value.babNilai = '';
-                }
+                const availableBab = datastore.value.bab.filter(b => (b.kelas === newKelas || (!b.kelas && newKelas === '1A')) && (b.mapel === settings.value.mapelAktif || !b.mapel));
+                filter.value.babNilai = availableBab.length > 0 ? availableBab[0].id : '';
             });
 
             watch(() => settings.value.mapelAktif, (newMapel) => {
-                const availableBab = datastore.value.bab.filter(b => 
-                    (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) &&
-                    (b.mapel === newMapel || !b.mapel)
-                );
-                if (availableBab.length > 0) {
-                    filter.value.babNilai = availableBab[0].id;
-                } else {
-                    filter.value.babNilai = '';
-                }
+                const availableBab = datastore.value.bab.filter(b => (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) && (b.mapel === newMapel || !b.mapel));
+                filter.value.babNilai = availableBab.length > 0 ? availableBab[0].id : '';
             });
 
-            const getMenuName = (id) => {
-                return menus.find(m => m.id === id)?.name || id;
-            };
+            const getMenuName = (id) => menus.find(m => m.id === id)?.name || id;
 
-            // --- LOGIKA MODUL A: DATA SISWA ---
-            const siswaTerfilterGlobal = computed(() => {
-                return datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
-            });
-
-            // PERUBAHAN: Membuat Computed Property baru khusus untuk disortir berdasarkan nomor bab (agar urutan barisnya selalu rapi dan mudah di-grouping visualnya)
+            const siswaTerfilterGlobal = computed(() => datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas));
             const babTerfilterSorted = computed(() => {
-                const filterBab = datastore.value.bab.filter(b => 
-                    (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) &&
-                    (b.mapel === settings.value.mapelAktif || !b.mapel)
-                );
-                // Urutkan berdasarkan nomor bab terlebih dahulu agar TP untuk bab yang sama bersebelahan.
+                const filterBab = datastore.value.bab.filter(b => (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) && (b.mapel === settings.value.mapelAktif || !b.mapel));
                 return filterBab.sort((a, b) => a.nomor - b.nomor);
             });
-
             const babTerfilterNilai = computed(() => {
                 if (!filter.value.globalKelas) return [];
-                return datastore.value.bab.filter(b => 
-                    (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) &&
-                    (b.mapel === settings.value.mapelAktif || !b.mapel)
-                ).sort((a, b) => a.nomor - b.nomor);
+                return datastore.value.bab.filter(b => (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) && (b.mapel === settings.value.mapelAktif || !b.mapel)).sort((a, b) => a.nomor - b.nomor);
             });
-
-            // LOGIKA BARU: Grouping Bab & TP untuk matriks dinamis Input Nilai
-            const groupedBab = computed(() => {
-                const groups = [];
-                babTerfilterNilai.value.forEach(b => {
-                    let group = groups.find(g => g.nomor === b.nomor);
-                    if (!group) {
-                        group = { nomor: b.nomor, nama: b.nama, tps: [] };
-                        groups.push(group);
-                    }
-                    group.tps.push(b);
-                });
-                return groups;
-            });
-
-            const totalTps = computed(() => groupedBab.value.reduce((sum, g) => sum + g.tps.length, 0));
-            const totalBabs = computed(() => groupedBab.value.length);
 
             const tambahSiswaCepat = () => {
-                if (!formSiswaCepat.value.nis || !formSiswaCepat.value.nama) {
-                    return alert('NIS dan Nama Lengkap harus diisi terlebih dahulu!');
-                }
-                datastore.value.siswa.push({
-                    id: Date.now(),
-                    nis: formSiswaCepat.value.nis,
-                    nisn: formSiswaCepat.value.nisn || '',
-                    nama: formSiswaCepat.value.nama,
-                    ttl: formSiswaCepat.value.ttl || '',
-                    kelas: filter.value.globalKelas
-                });
-                formSiswaCepat.value.nis = '';
-                formSiswaCepat.value.nisn = '';
-                formSiswaCepat.value.nama = '';
-                formSiswaCepat.value.ttl = '';
+                if (!formSiswaCepat.value.nis || !formSiswaCepat.value.nama) return alert('NIS dan Nama Lengkap harus diisi terlebih dahulu!');
+                datastore.value.siswa.push({ id: Date.now(), nis: formSiswaCepat.value.nis, nisn: formSiswaCepat.value.nisn || '', nama: formSiswaCepat.value.nama, ttl: formSiswaCepat.value.ttl || '', kelas: filter.value.globalKelas });
+                formSiswaCepat.value.nis = ''; formSiswaCepat.value.nisn = ''; formSiswaCepat.value.nama = ''; formSiswaCepat.value.ttl = '';
             };
 
-            const hapusSiswa = (id) => {
-                if (confirm('Apakah Anda yakin ingin menghapus data siswa ini secara permanen?')) {
-                    datastore.value.siswa = datastore.value.siswa.filter(s => s.id !== id);
-                }
-            };
-
-            const editSiswa = (siswa) => {
-                modal.value.siswa.data = { ...siswa };
-                modal.value.siswa.show = true;
-            };
-
+            const hapusSiswa = (id) => { if (confirm('Yakin hapus siswa secara permanen?')) datastore.value.siswa = datastore.value.siswa.filter(s => s.id !== id); };
+            const editSiswa = (siswa) => { modal.value.siswa.data = { ...siswa }; modal.value.siswa.show = true; };
             const simpanEditSiswa = () => {
-                if (!modal.value.siswa.data.nis || !modal.value.siswa.data.nama) {
-                    return alert('NIS dan Nama Lengkap tidak boleh kosong!');
-                }
+                if (!modal.value.siswa.data.nis || !modal.value.siswa.data.nama) return alert('NIS dan Nama tidak boleh kosong!');
                 const index = datastore.value.siswa.findIndex(s => s.id === modal.value.siswa.data.id);
-                if (index !== -1) {
-                    datastore.value.siswa[index].nis = modal.value.siswa.data.nis;
-                    datastore.value.siswa[index].nisn = modal.value.siswa.data.nisn;
-                    datastore.value.siswa[index].nama = modal.value.siswa.data.nama;
-                    datastore.value.siswa[index].ttl = modal.value.siswa.data.ttl;
-                }
+                if (index !== -1) { datastore.value.siswa[index] = { ...modal.value.siswa.data }; }
                 modal.value.siswa.show = false;
             };
 
             const downloadTemplateSiswa = () => {
-                let wb = XLSX.utils.book_new();
-                let data = [{ 'NIS': '1011', 'NISN': '0112233445', 'Nama Lengkap': 'Contoh Siswa', 'Tempat Tanggal Lahir': 'Jakarta, 1 Januari 2012' }];
-                let ws = XLSX.utils.json_to_sheet(data);
-                XLSX.utils.book_append_sheet(wb, ws, "Template_Siswa");
-                XLSX.writeFile(wb, `Template_Import_Siswa_Kelas_${filter.value.globalKelas}.xlsx`);
+                let wb = XLSX.utils.book_new(); let data = [{ 'NIS': '1011', 'NISN': '0112233445', 'Nama Lengkap': 'Contoh Siswa', 'Tempat Tanggal Lahir': 'Jakarta, 1 Januari 2012' }];
+                let ws = XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb, ws, "Template_Siswa"); XLSX.writeFile(wb, `Template_Import_Siswa_Kelas_${filter.value.globalKelas}.xlsx`);
             };
 
             const handleExcelImportSiswa = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
+                const file = e.target.files[0]; if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     try {
-                        const data = evt.target.result;
-                        const workbook = XLSX.read(data, { type: 'binary' });
-                        const firstSheet = workbook.SheetNames[0];
-                        const excelRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
-                        
-                        let importedCount = 0;
+                        const data = evt.target.result; const workbook = XLSX.read(data, { type: 'binary' }); const firstSheet = workbook.SheetNames[0];
+                        const excelRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]); let importedCount = 0;
                         excelRows.forEach(row => {
                             if (row['Nama Lengkap'] || row['Nama']) {
-                                datastore.value.siswa.push({
-                                    id: Date.now() + Math.random(),
-                                    nis: (row['NIS'] || '').toString(),
-                                    nisn: (row['NISN'] || '').toString(),
-                                    nama: row['Nama Lengkap'] || row['Nama'] || '',
-                                    ttl: row['Tempat Tanggal Lahir'] || row['TTL'] || '',
-                                    kelas: filter.value.globalKelas
-                                });
+                                datastore.value.siswa.push({ id: Date.now() + Math.random(), nis: (row['NIS'] || '').toString(), nisn: (row['NISN'] || '').toString(), nama: row['Nama Lengkap'] || row['Nama'] || '', ttl: row['Tempat Tanggal Lahir'] || row['TTL'] || '', kelas: filter.value.globalKelas });
                                 importedCount++;
                             }
                         });
-                        alert(`Berhasil mengimpor ${importedCount} data siswa ke Kelas ${filter.value.globalKelas}!`);
-                        e.target.value = null; 
-                    } catch (error) {
-                        alert('Gagal membaca file Excel. Pastikan format sesuai template.');
-                    }
+                        alert(`Berhasil mengimpor ${importedCount} data siswa ke Kelas ${filter.value.globalKelas}!`); e.target.value = null; 
+                    } catch (error) { alert('Gagal membaca file Excel.'); }
                 };
                 reader.readAsBinaryString(file);
             };
@@ -2255,60 +2083,30 @@ service cloud.firestore {
                         let importedCount = 0;
                         parsed.forEach(row => {
                             if (row.nama) {
-                                datastore.value.siswa.push({
-                                    id: Date.now() + Math.random(),
-                                    nis: (row.nis || '').toString(),
-                                    nisn: (row.nisn || '').toString(),
-                                    nama: row.nama,
-                                    ttl: row.ttl || '',
-                                    kelas: filter.value.globalKelas
-                                });
-                                importedCount++;
+                                datastore.value.siswa.push({ id: Date.now() + Math.random(), nis: (row.nis || '').toString(), nisn: (row.nisn || '').toString(), nama: row.nama, ttl: row.ttl || '', kelas: filter.value.globalKelas }); importedCount++;
                             }
                         });
-                        alert(`Berhasil mengimpor ${importedCount} data siswa dari JSON!`);
-                        jsonImportSiswa.value = '';
-                    } else {
-                         alert('Format JSON harus berupa Array [{}, {}]');
-                    }
-                } catch (e) {
-                    alert('Format text JSON tidak valid atau ada kesalahan sintaks!');
-                }
+                        alert(`Berhasil mengimpor ${importedCount} data siswa dari JSON!`); jsonImportSiswa.value = '';
+                    } else { alert('Format JSON harus Array [{}, {}]'); }
+                } catch (e) { alert('Format text JSON tidak valid!'); }
             };
 
-            // --- LOGIKA MODUL B: PRESENSI ---
-            const siswaTerfilterPresensi = computed(() => {
-                return datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
-            });
-
+            const siswaTerfilterPresensi = computed(() => datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas));
             const setPresensi = (siswaId, status) => {
                 const tgl = filter.value.tanggalPresensi;
                 if (!datastore.value.presensi[tgl]) datastore.value.presensi[tgl] = {};
                 datastore.value.presensi[tgl][siswaId] = status;
             };
-
             const getPresensiClass = (siswaId, status) => {
-                const tgl = filter.value.tanggalPresensi;
-                const current = datastore.value.presensi[tgl]?.[siswaId] || 'H'; 
+                const current = datastore.value.presensi[filter.value.tanggalPresensi]?.[siswaId] || 'H'; 
                 if (current !== status) return 'bg-white text-gray-400 hover:bg-gray-100';
-                
-                switch (status) {
-                    case 'H': return 'bg-emerald-600 text-white';
-                    case 'S': return 'bg-blue-500 text-white';
-                    case 'I': return 'bg-amber-500 text-white';
-                    case 'A': return 'bg-red-600 text-white';
-                }
+                switch (status) { case 'H': return 'bg-emerald-600 text-white'; case 'S': return 'bg-blue-500 text-white'; case 'I': return 'bg-amber-500 text-white'; case 'A': return 'bg-red-600 text-white'; }
             };
 
             const exportPresensiExcel = () => {
                 let wb = XLSX.utils.book_new();
-                let data = datastore.value.siswa.map((s, i) => {
-                    let status = datastore.value.presensi[filter.value.tanggalPresensi]?.[s.id] || 'H';
-                    return { 'No': i+1, 'NIS': s.nis, 'Nama': s.nama, 'Kelas': s.kelas, 'Status Kehadiran': status };
-                });
-                let ws = XLSX.utils.json_to_sheet(data);
-                XLSX.utils.book_append_sheet(wb, ws, "Rekap Presensi");
-                XLSX.writeFile(wb, `Rekap_Presensi_${filter.value.tanggalPresensi}.xlsx`);
+                let data = datastore.value.siswa.map((s, i) => { return { 'No': i+1, 'NIS': s.nis, 'Nama': s.nama, 'Kelas': s.kelas, 'Status Kehadiran': datastore.value.presensi[filter.value.tanggalPresensi]?.[s.id] || 'H' }; });
+                let ws = XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb, ws, "Rekap Presensi"); XLSX.writeFile(wb, `Rekap_Presensi_${filter.value.tanggalPresensi}.xlsx`);
             };
 
             const rekapPresensiSemester = computed(() => {
@@ -2316,10 +2114,7 @@ service cloud.firestore {
                     let H = 0, S = 0, I = 0, A = 0;
                     for (let tgl in datastore.value.presensi) {
                         let status = datastore.value.presensi[tgl][s.id] || 'H';
-                        if (status === 'H') H++;
-                        if (status === 'S') S++;
-                        if (status === 'I') I++;
-                        if (status === 'A') A++;
+                        if (status === 'H') H++; if (status === 'S') S++; if (status === 'I') I++; if (status === 'A') A++;
                     }
                     return { ...s, H, S, I, A };
                 });
@@ -2327,80 +2122,41 @@ service cloud.firestore {
 
             const exportRekapSemesterExcel = () => {
                 let wb = XLSX.utils.book_new();
-                let data = rekapPresensiSemester.value.map((s, i) => {
-                    return { 'No': i+1, 'NIS': s.nis, 'Nama': s.nama, 'Kelas': s.kelas, 'Hadir': s.H, 'Sakit': s.S, 'Izin': s.I, 'Alpa': s.A };
-                });
-                let ws = XLSX.utils.json_to_sheet(data);
-                XLSX.utils.book_append_sheet(wb, ws, "Rekap Semester");
-                XLSX.writeFile(wb, `Rekap_Presensi_Semester_Kelas_${filter.value.globalKelas}.xlsx`);
+                let data = rekapPresensiSemester.value.map((s, i) => { return { 'No': i+1, 'NIS': s.nis, 'Nama': s.nama, 'Kelas': s.kelas, 'Hadir': s.H, 'Sakit': s.S, 'Izin': s.I, 'Alpa': s.A }; });
+                let ws = XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb, ws, "Rekap Semester"); XLSX.writeFile(wb, `Rekap_Presensi_Semester_Kelas_${filter.value.globalKelas}.xlsx`);
             };
 
-            // --- KALKULASI PERSENTASE KEHADIRAN (BERDASARKAN RUMUS) ---
             const hariEfektif = computed(() => {
-                let count = 0;
-                const currentClassStudents = siswaTerfilterPresensi.value.map(s => s.id);
+                let count = 0; const currentClassStudents = siswaTerfilterPresensi.value.map(s => s.id);
                 if (currentClassStudents.length === 0) return 0;
-
-                for (let tgl in datastore.value.presensi) {
-                    // Anggap 1 hari efektif jika minimal ada 1 siswa di kelas tersebut yang punya data presensi
-                    const hasPresensi = currentClassStudents.some(id => datastore.value.presensi[tgl][id]);
-                    if (hasPresensi) count++;
-                }
+                for (let tgl in datastore.value.presensi) { const hasPresensi = currentClassStudents.some(id => datastore.value.presensi[tgl][id]); if (hasPresensi) count++; }
                 return count;
             });
 
             const rekapAkumulasiKelas = computed(() => {
-                let totalS = 0, totalI = 0, totalA = 0;
-                const currentClassStudents = siswaTerfilterPresensi.value.map(s => s.id);
-                
+                let totalS = 0, totalI = 0, totalA = 0; const currentClassStudents = siswaTerfilterPresensi.value.map(s => s.id);
                 for (let tgl in datastore.value.presensi) {
-                    currentClassStudents.forEach(id => {
-                        const status = datastore.value.presensi[tgl][id];
-                        if (status === 'S') totalS++;
-                        else if (status === 'I') totalI++;
-                        else if (status === 'A') totalA++;
-                    });
+                    currentClassStudents.forEach(id => { const status = datastore.value.presensi[tgl][id]; if (status === 'S') totalS++; else if (status === 'I') totalI++; else if (status === 'A') totalA++; });
                 }
                 return { S: totalS, I: totalI, A: totalA };
             });
 
             const persentaseKehadiranKelas = computed(() => {
-                const jmlSiswa = siswaTerfilterPresensi.value.length;
-                const hEfektif = hariEfektif.value;
-                const penyebut = jmlSiswa * hEfektif;
-                
-                // Mencegah error pembagian dengan 0 jika belum ada data/hari efektif
+                const penyebut = siswaTerfilterPresensi.value.length * hariEfektif.value;
                 if (penyebut === 0) return { S: 0, I: 0, A: 0 };
-
                 const rekap = rekapAkumulasiKelas.value;
-                return {
-                    S: ((rekap.S * 100) / penyebut).toFixed(2),
-                    I: ((rekap.I * 100) / penyebut).toFixed(2),
-                    A: ((rekap.A * 100) / penyebut).toFixed(2)
-                };
+                return { S: ((rekap.S * 100) / penyebut).toFixed(2), I: ((rekap.I * 100) / penyebut).toFixed(2), A: ((rekap.A * 100) / penyebut).toFixed(2) };
             });
 
-            // --- LOGIKA MANAJEMEN BAB ---
             const openModalBab = (bab = null) => {
                 if (bab) {
-                    modal.value.bab.isEdit = true;
-                    modal.value.bab.data = { ...bab };
+                    modal.value.bab.isEdit = true; modal.value.bab.data = { ...bab };
                     if (!modal.value.bab.data.kelas) modal.value.bab.data.kelas = filter.value.globalKelas;
                     if (!modal.value.bab.data.mapel) modal.value.bab.data.mapel = settings.value.mapelAktif;
                 } else {
                     modal.value.bab.isEdit = false;
-                    const babSamaKelasMapel = datastore.value.bab.filter(b => 
-                        (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) &&
-                        (b.mapel === settings.value.mapelAktif || !b.mapel)
-                    );
-                    modal.value.bab.data = { 
-                        id: Date.now(), 
-                        nomor: babSamaKelasMapel.length + 1, 
-                        nama: '', 
-                        tp: '', 
-                        kelas: filter.value.globalKelas,
-                        mapel: settings.value.mapelAktif
-                    };
+                    const babSamaKelasMapel = datastore.value.bab.filter(b => (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) && (b.mapel === settings.value.mapelAktif || !b.mapel));
+                    modal.value.bab.data = { id: Date.now(), nomor: babSamaKelasMapel.length + 1, nama: '', tp: '', kelas: filter.value.globalKelas, mapel: settings.value.mapelAktif };
                 }
                 modal.value.bab.show = true;
             };
@@ -2408,277 +2164,147 @@ service cloud.firestore {
             const simpanBab = () => {
                 const d = modal.value.bab.data;
                 if (!d.nomor || !d.nama || !d.tp || !d.kelas || !d.mapel) return alert('Mohon lengkapi semua aspek deskripsi!');
-                if (modal.value.bab.isEdit) {
-                    const i = datastore.value.bab.findIndex(b => b.id === d.id);
-                    if (i !== -1) datastore.value.bab[i] = d;
-                } else {
-                    datastore.value.bab.push(d);
-                }
-                filter.value.babNilai = d.id; 
-                modal.value.bab.show = false;
+                if (modal.value.bab.isEdit) { const i = datastore.value.bab.findIndex(b => b.id === d.id); if (i !== -1) datastore.value.bab[i] = d; } 
+                else { datastore.value.bab.push(d); }
+                filter.value.babNilai = d.id; modal.value.bab.show = false;
             };
+            const hapusBab = (id) => { if (confirm('Hapus Tujuan Pembelajaran (TP) ini?')) datastore.value.bab = datastore.value.bab.filter(b => b.id !== id); };
 
-            const hapusBab = (id) => {
-                if (confirm('Hapus Tujuan Pembelajaran (TP) ini akan berdampak pada hilangnya tautan data nilai terikat. Lanjutkan?')) {
-                    datastore.value.bab = datastore.value.bab.filter(b => b.id !== id);
-                }
-            };
-
-            // --- LOGIKA MODUL D: INPUT NILAI ---
             const siswaTerfilterNilai = computed(() => {
-                if (!filter.value.globalKelas) return [];
-                return datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
+                if (!filter.value.globalKelas) return []; return datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
             });
 
             const getNilaiObj = (siswaId, babId) => {
                 let item = datastore.value.nilai.find(n => n.siswaId === siswaId && n.babId === babId);
-                if (!item) {
-                    item = { siswaId, babId, f1: null, f2: null, f3: null, f4: null, sumatif: null, asts: null, asas: null };
-                    datastore.value.nilai.push(item);
-                } else if (item.formatif !== undefined && item.f1 === undefined) {
-                    // Backward compatibility untuk data nilai formatif versi lama
-                    item.f1 = item.formatif;
-                    delete item.formatif;
-                }
+                if (!item) { item = { siswaId, babId, formatif: 0, sumatif: 0, asts: 0, asas: 0 }; datastore.value.nilai.push(item); }
                 return item;
             };
 
             const exportNilaiExcel = () => {
-                if (!filter.value.globalKelas || groupedBab.value.length === 0) return alert('Data Bab/TP belum ada untuk diekspor.');
+                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Tentukan parameter filter sebelum unduh data.');
                 let wb = XLSX.utils.book_new();
                 let data = siswaTerfilterNilai.value.map((s, i) => {
-                    let row = { 'No': i+1, 'Nama': s.nama, 'Kelas': s.kelas };
-                    // Header Dinamis Formatif
-                    groupedBab.value.forEach(g => {
-                        g.tps.forEach((tp, idx) => {
-                            row[`Formatif BAB ${g.nomor} - TP ${idx+1}`] = getNilaiObj(s.id, tp.id).f1;
-                        });
-                    });
-                    // Header Dinamis Sumatif
-                    groupedBab.value.forEach(g => {
-                        row[`Sumatif BAB ${g.nomor}`] = getNilaiObj(s.id, g.tps[0].id).sumatif;
-                    });
-                    row['ASTS'] = getNilaiObj(s.id, groupedBab.value[0].tps[0].id).asts;
-                    row['ASAS'] = getNilaiObj(s.id, groupedBab.value[0].tps[0].id).asas;
-                    return row;
+                    let obj = getNilaiObj(s.id, filter.value.babNilai);
+                    return { 'No': i+1, 'Nama': s.nama, 'Kelas': s.kelas, 'Formatif': obj.formatif, 'Sumatif': obj.sumatif, 'ASTS': obj.asts, 'ASAS': obj.asas };
                 });
-                let ws = XLSX.utils.json_to_sheet(data);
-                XLSX.utils.book_append_sheet(wb, ws, "Nilai Matriks");
-                XLSX.writeFile(wb, `Rekap_Nilai_Matriks_Kelas_${filter.value.globalKelas}.xlsx`);
+                let ws = XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb, ws, "Nilai"); XLSX.writeFile(wb, `Rekap_Nilai_Kelas_${filter.value.globalKelas}_BabID_${filter.value.babNilai}.xlsx`);
             };
 
             const downloadTemplateNilai = () => {
-                if (!filter.value.globalKelas || groupedBab.value.length === 0) return alert('Silakan buat Bab/TP terlebih dahulu di menu Bab & Tujuan Belajar!');
-                let wb = XLSX.utils.book_new();
-                let data = siswaTerfilterNilai.value.map(s => {
-                    let row = { 'ID_SISTEM': s.id, 'Nama Lengkap': s.nama };
-                    groupedBab.value.forEach(g => {
-                        g.tps.forEach((tp, idx) => row[`Formatif BAB ${g.nomor} - TP ${idx+1}`] = '');
-                    });
-                    groupedBab.value.forEach(g => row[`Sumatif BAB ${g.nomor}`] = '');
-                    row['ASTS'] = '';
-                    row['ASAS'] = '';
-                    return row;
-                });
-                
-                if (data.length === 0) {
-                    let dummy = { 'ID_SISTEM': 'ISI_ID_JIKA_ADA', 'Nama Lengkap': 'Siswa Belum Ada' };
-                    groupedBab.value.forEach(g => {
-                        g.tps.forEach((tp, idx) => dummy[`Formatif BAB ${g.nomor} - TP ${idx+1}`] = '');
-                    });
-                    groupedBab.value.forEach(g => dummy[`Sumatif BAB ${g.nomor}`] = '');
-                    dummy['ASTS'] = ''; dummy['ASAS'] = '';
-                    data = [dummy];
-                }
-
-                let ws = XLSX.utils.json_to_sheet(data);
-                XLSX.utils.book_append_sheet(wb, ws, "Template_Nilai");
-                XLSX.writeFile(wb, `Template_Import_Nilai_Kelas_${filter.value.globalKelas}.xlsx`);
+                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Silakan pilih Acuan Bab terlebih dahulu!');
+                let wb = XLSX.utils.book_new(); let data = siswaTerfilterNilai.value.map(s => { return { 'ID_SISTEM': s.id, 'Nama Lengkap': s.nama, 'Formatif': 0, 'Sumatif': 0, 'ASTS': 0, 'ASAS': 0 }; });
+                if (data.length === 0) data = [{ 'ID_SISTEM': 'ISI_ID_JIKA_ADA', 'Nama Lengkap': 'Siswa Belum Ada', 'Formatif': 0, 'Sumatif': 0, 'ASTS': 0, 'ASAS': 0 }];
+                let ws = XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb, ws, "Template_Nilai"); XLSX.writeFile(wb, `Template_Import_Nilai_Kelas_${filter.value.globalKelas}.xlsx`);
             };
 
             const handleExcelImportNilai = (e) => {
-                if (!filter.value.globalKelas || groupedBab.value.length === 0) return alert('Buat Bab/TP terlebih dahulu sebelum mengimpor!');
-                const file = e.target.files[0];
-                if (!file) return;
-                
+                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Pilih Bab terlebih dahulu sebelum mengimpor!');
+                const file = e.target.files[0]; if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     try {
-                        const data = evt.target.result;
-                        const workbook = XLSX.read(data, { type: 'binary' });
-                        const firstSheet = workbook.SheetNames[0];
-                        const excelRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
-                        
-                        let importedCount = 0;
+                        const workbook = XLSX.read(evt.target.result, { type: 'binary' }); const firstSheet = workbook.SheetNames[0];
+                        const excelRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]); let importedCount = 0;
                         excelRows.forEach(row => {
-                            let student = siswaTerfilterNilai.value.find(s => s.id === row['ID_SISTEM']) || 
-                                          siswaTerfilterNilai.value.find(s => s.nama.toLowerCase() === (row['Nama Lengkap'] || '').toLowerCase());
-                            
+                            let student = siswaTerfilterNilai.value.find(s => s.id === row['ID_SISTEM']) || siswaTerfilterNilai.value.find(s => s.nama.toLowerCase() === (row['Nama Lengkap'] || '').toLowerCase());
                             if (student) {
-                                // Ekstrak Formatif Dinamis
-                                groupedBab.value.forEach(g => {
-                                    g.tps.forEach((tp, idx) => {
-                                        let key = `Formatif BAB ${g.nomor} - TP ${idx+1}`;
-                                        if (row[key] !== undefined) getNilaiObj(student.id, tp.id).f1 = Number(row[key]);
-                                    });
-                                });
-                                // Ekstrak Sumatif Dinamis
-                                groupedBab.value.forEach(g => {
-                                    let key = `Sumatif BAB ${g.nomor}`;
-                                    if (row[key] !== undefined) getNilaiObj(student.id, g.tps[0].id).sumatif = Number(row[key]);
-                                });
-                                // Ekstrak ASTS & ASAS
-                                if (row['ASTS'] !== undefined) getNilaiObj(student.id, groupedBab.value[0].tps[0].id).asts = Number(row['ASTS']);
-                                if (row['ASAS'] !== undefined) getNilaiObj(student.id, groupedBab.value[0].tps[0].id).asas = Number(row['ASAS']);
-                                
+                                let obj = getNilaiObj(student.id, filter.value.babNilai);
+                                if (row['Formatif'] !== undefined) obj.formatif = Number(row['Formatif']);
+                                if (row['Sumatif'] !== undefined) obj.sumatif = Number(row['Sumatif']);
+                                if (row['ASTS'] !== undefined) obj.asts = Number(row['ASTS']);
+                                if (row['ASAS'] !== undefined) obj.asas = Number(row['ASAS']);
                                 importedCount++;
                             }
                         });
-                        alert(`Berhasil mengimpor dan memperbarui nilai matriks untuk ${importedCount} siswa!`);
-                        e.target.value = null; 
-                    } catch (error) {
-                        alert('Gagal membaca file Excel. Pastikan format tidak merubah struktur header template.');
-                    }
+                        alert(`Berhasil memperbarui nilai untuk ${importedCount} siswa!`); e.target.value = null; 
+                    } catch (error) { alert('Gagal membaca file Excel.'); }
                 };
                 reader.readAsBinaryString(file);
             };
 
             const handleJsonImportNilai = () => {
-                alert('Fitur Import JSON dinonaktifkan sementara. Silakan gunakan Import via Excel untuk memproses matriks tabel yang dinamis ini.');
+                if (!filter.value.globalKelas || !filter.value.babNilai) return alert('Pilih Bab terlebih dahulu!');
+                try {
+                    const parsed = JSON.parse(jsonImportNilai.value);
+                    if (Array.isArray(parsed)) {
+                        let importedCount = 0;
+                        parsed.forEach(row => {
+                            const student = siswaTerfilterNilai.value.find(s => s.nama.toLowerCase() === (row.nama || '').toLowerCase());
+                            if (student) {
+                                let obj = getNilaiObj(student.id, filter.value.babNilai);
+                                if (row.formatif !== undefined) obj.formatif = Number(row.formatif);
+                                if (row.sumatif !== undefined) obj.sumatif = Number(row.sumatif);
+                                if (row.asts !== undefined) obj.asts = Number(row.asts);
+                                if (row.asas !== undefined) obj.asas = Number(row.asas);
+                                importedCount++;
+                            }
+                        });
+                        alert(`Berhasil memproses nilai untuk ${importedCount} siswa dari data JSON!`); jsonImportNilai.value = '';
+                    } else { alert('Format JSON harus Array [{}, {}]'); }
+                } catch (e) { alert('Format JSON tidak valid!'); }
             };
 
-            // --- LOGIKA MODUL E: KHUSUS KELAS 6 ---
-            const isKelas6String = (str) => {
-                return str && str.startsWith('6');
-            };
-
-            const siswaKelas6 = computed(() => {
-                return datastore.value.siswa.filter(s => isKelas6String(s.kelas));
-            });
-
+            const isKelas6String = (str) => str && str.startsWith('6');
+            const siswaKelas6 = computed(() => datastore.value.siswa.filter(s => isKelas6String(s.kelas)));
             const getUjian6Obj = (siswaId) => {
                 let item = datastore.value.ujian6.find(u => u.siswaId === siswaId);
-                if (!item) {
-                    item = { siswaId, praktik: 0, tertulis: 0 };
-                    datastore.value.ujian6.push(item);
-                }
+                if (!item) { item = { siswaId, praktik: 0, tertulis: 0 }; datastore.value.ujian6.push(item); }
                 return item;
             };
 
-            // --- LOGIKA MODUL F: OLAHAN NILAI AKHIR ---
             const siswaTerfilterOlahan = computed(() => {
-                if (!filter.value.globalKelas) return [];
-                return datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
+                if (!filter.value.globalKelas) return []; return datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
             });
 
             const hitungRerataKomponen = (siswaId, komponen) => {
                 let records = datastore.value.nilai.filter(n => n.siswaId === siswaId);
                 if (records.length === 0) return 0;
-                
-                let total = 0;
-                let count = 0;
-                
-                // Jika sedang mencari Rerata Formatif, gabungkan seluruh nilai F1-F4 dari seluruh bab
-                if (komponen === 'formatif') {
-                    records.forEach(r => {
-                        if (typeof r.f1 === 'number') { total += r.f1; count++; }
-                        if (typeof r.f2 === 'number') { total += r.f2; count++; }
-                        if (typeof r.f3 === 'number') { total += r.f3; count++; }
-                        if (typeof r.f4 === 'number') { total += r.f4; count++; }
-                        // Backward compatibility
-                        if (typeof r.formatif === 'number') { total += r.formatif; count++; }
-                    });
-                } else {
-                    records.forEach(r => {
-                        if (typeof r[komponen] === 'number') {
-                            total += r[komponen];
-                            count++;
-                        }
-                    });
-                }
-                
-                if (count === 0) return 0;
-                return Math.round(total / count);
+                let total = records.reduce((acc, curr) => acc + (curr[komponen] || 0), 0);
+                return Math.round(total / records.length);
             };
 
             const hitungNilaiAkademis = (siswaId) => {
-                let fRata = hitungRerataKomponen(siswaId, 'formatif');
-                let sRata = hitungRerataKomponen(siswaId, 'sumatif');
-                let astsRata = hitungRerataKomponen(siswaId, 'asts');
-                let asasRata = hitungRerataKomponen(siswaId, 'asas');
+                let fRata = hitungRerataKomponen(siswaId, 'formatif'); let sRata = hitungRerataKomponen(siswaId, 'sumatif');
+                let astsRata = hitungRerataKomponen(siswaId, 'asts'); let asasRata = hitungRerataKomponen(siswaId, 'asas');
                 let b = settings.value.bobot;
                 return Math.round(((fRata * b.formatif) + (sRata * b.sumatif) + (astsRata * b.asts) + (asasRata * b.asas)) / 100);
             };
 
-            const hitungRerataUjian = (siswaId) => {
-                let uj = getUjian6Obj(siswaId);
-                return Math.round(((uj.praktik || 0) + (uj.tertulis || 0)) / 2);
-            };
-
+            const hitungRerataUjian = (siswaId) => { let uj = getUjian6Obj(siswaId); return Math.round(((uj.praktik || 0) + (uj.tertulis || 0)) / 2); };
             const hitungNilaiAkhir = (siswaId, kelas) => {
                 let nilaiAkademis = hitungNilaiAkademis(siswaId);
-                if (isKelas6String(kelas)) {
-                    let rerataUjian = hitungRerataUjian(siswaId);
-                    return Math.round((nilaiAkademis * 0.6) + (rerataUjian * 0.4));
-                }
+                if (isKelas6String(kelas)) { let rerataUjian = hitungRerataUjian(siswaId); return Math.round((nilaiAkademis * 0.6) + (rerataUjian * 0.4)); }
                 return nilaiAkademis;
             };
 
-            // --- LOGIKA MODUL G: JURNAL & CATATAN ---
-            const jurnalTerfilter = computed(() => {
-                return datastore.value.jurnal.filter(j => j.kelas === filter.value.globalKelas);
-            });
-
-            const catatanTerfilter = computed(() => {
-                return datastore.value.catatan.filter(c => {
-                    let siswa = datastore.value.siswa.find(s => s.id === c.siswaId);
-                    return siswa && siswa.kelas === filter.value.globalKelas;
-                });
-            });
+            const jurnalTerfilter = computed(() => datastore.value.jurnal.filter(j => j.kelas === filter.value.globalKelas));
+            const catatanTerfilter = computed(() => datastore.value.catatan.filter(c => {
+                let siswa = datastore.value.siswa.find(s => s.id === c.siswaId); return siswa && siswa.kelas === filter.value.globalKelas;
+            }));
 
             const openModalJurnal = (jurnal = null) => {
-                if (jurnal) {
-                    modal.value.jurnal.isEdit = true;
-                    modal.value.jurnal.data = { ...jurnal };
-                } else {
-                    modal.value.jurnal.isEdit = false;
-                    modal.value.jurnal.data = { id: Date.now(), tanggal: new Date().toISOString().split('T')[0], kelas: filter.value.globalKelas, materi: '', pencapaian: '', hambatan: '' };
-                }
+                if (jurnal) { modal.value.jurnal.isEdit = true; modal.value.jurnal.data = { ...jurnal }; } 
+                else { modal.value.jurnal.isEdit = false; modal.value.jurnal.data = { id: Date.now(), tanggal: new Date().toISOString().split('T')[0], kelas: filter.value.globalKelas, materi: '', pencapaian: '', hambatan: '' }; }
                 modal.value.jurnal.show = true;
             };
 
             const simpanJurnal = () => {
-                const d = modal.value.jurnal.data;
-                if (!d.tanggal || !d.materi || !d.pencapaian || !d.kelas) return alert('Mohon isi field esensial dan target Kelas!');
-                if (modal.value.jurnal.isEdit) {
-                    const i = datastore.value.jurnal.findIndex(j => j.id === d.id);
-                    if (i !== -1) datastore.value.jurnal[i] = d;
-                } else {
-                    datastore.value.jurnal.push(d);
-                }
+                const d = modal.value.jurnal.data; if (!d.tanggal || !d.materi || !d.pencapaian || !d.kelas) return alert('Mohon isi field esensial!');
+                if (modal.value.jurnal.isEdit) { const i = datastore.value.jurnal.findIndex(j => j.id === d.id); if (i !== -1) datastore.value.jurnal[i] = d; } 
+                else { datastore.value.jurnal.push(d); }
                 modal.value.jurnal.show = false;
             };
 
-            const hapusJurnal = (id) => {
-                if (confirm('Hapus log berkas jurnal?')) datastore.value.jurnal = datastore.value.jurnal.filter(j => j.id !== id);
-            };
+            const hapusJurnal = (id) => { if (confirm('Hapus log jurnal?')) datastore.value.jurnal = datastore.value.jurnal.filter(j => j.id !== id); };
 
             const openModalCatatan = (catatan = null) => {
                 const today = new Date().toISOString().split('T')[0];
                 if (catatan) {
                     modal.value.catatan.isEdit = true;
-                    // Backward compatibility untuk data lama (tipe -> jenis, fallback poin 0, tanggal hari ini)
-                    modal.value.catatan.data = { 
-                        ...catatan,
-                        tanggal: catatan.tanggal || today,
-                        jenis: catatan.jenis || (catatan.tipe === 'Akademis' ? 'Tambah' : 'Kurang'),
-                        poin: catatan.poin || 1
-                    };
-                    let student = datastore.value.siswa.find(s => s.id === catatan.siswaId);
-                    modal.value.catatan.filterKelas = student ? student.kelas : '';
+                    modal.value.catatan.data = { ...catatan, tanggal: catatan.tanggal || today, jenis: catatan.jenis || (catatan.tipe === 'Akademis' ? 'Tambah' : 'Kurang'), poin: catatan.poin || 1 };
+                    let student = datastore.value.siswa.find(s => s.id === catatan.siswaId); modal.value.catatan.filterKelas = student ? student.kelas : '';
                 } else {
-                    modal.value.catatan.isEdit = false;
-                    modal.value.catatan.data = { id: Date.now(), siswaId: '', tanggal: today, jenis: 'Tambah', poin: 1, narasi: '' };
+                    modal.value.catatan.isEdit = false; modal.value.catatan.data = { id: Date.now(), siswaId: '', tanggal: today, jenis: 'Tambah', poin: 1, narasi: '' };
                     modal.value.catatan.filterKelas = filter.value.kelasCatatan !== 'Semua' ? filter.value.kelasCatatan : (listRombel.value[0] || '');
                 }
                 modal.value.catatan.show = true;
@@ -2686,112 +2312,150 @@ service cloud.firestore {
 
             const simpanCatatan = () => {
                 const d = modal.value.catatan.data;
-                if (!d.siswaId) return alert('Mohon pilih siswa terlebih dahulu!');
-                if (!d.tanggal) return alert('Tanggal tidak boleh kosong!');
-                if (!d.narasi) return alert('Catatan / narasi tidak boleh kosong!');
-                
-                if (modal.value.catatan.isEdit) {
-                    const i = datastore.value.catatan.findIndex(c => c.id === d.id);
-                    if (i !== -1) datastore.value.catatan[i] = d;
-                } else {
-                    datastore.value.catatan.push(d);
-                }
+                if (!d.siswaId) return alert('Pilih siswa!'); if (!d.tanggal || !d.narasi) return alert('Tanggal dan catatan tidak boleh kosong!');
+                if (modal.value.catatan.isEdit) { const i = datastore.value.catatan.findIndex(c => c.id === d.id); if (i !== -1) datastore.value.catatan[i] = d; } 
+                else { datastore.value.catatan.push(d); }
                 modal.value.catatan.show = false;
             };
 
-            const hapusCatatan = (id) => {
-                if (confirm('Hapus lampiran catatan siswa ini?')) datastore.value.catatan = datastore.value.catatan.filter(c => c.id !== id);
-            };
+            const hapusCatatan = (id) => { if (confirm('Hapus catatan?')) datastore.value.catatan = datastore.value.catatan.filter(c => c.id !== id); };
+            const getNamaSiswaById = (id) => datastore.value.siswa.find(s => s.id === id)?.nama || 'Siswa Terhapus';
 
-            const getNamaSiswaById = (id) => {
-                return datastore.value.siswa.find(s => s.id === id)?.nama || 'Siswa Terhapus';
-            };
-
-            // --- LOGIKA MODUL H (UNDUH REKAP) ---
             const exportRekapPresensiExcelModulH = () => {
-                let k = filter.value.globalKelas;
-                let siswaKelas = datastore.value.siswa.filter(s => s.kelas === k);
+                let k = filter.value.globalKelas; let siswaKelas = datastore.value.siswa.filter(s => s.kelas === k);
                 if (siswaKelas.length === 0) return alert('Tidak ada siswa di kelas ' + k);
                 let rekap = siswaKelas.map((s, i) => {
                     let H = 0, S = 0, I = 0, A = 0;
-                    for (let tgl in datastore.value.presensi) {
-                        let status = datastore.value.presensi[tgl][s.id] || 'H';
-                        if (status === 'H') H++;
-                        if (status === 'S') S++;
-                        if (status === 'I') I++;
-                        if (status === 'A') A++;
-                    }
+                    for (let tgl in datastore.value.presensi) { let status = datastore.value.presensi[tgl][s.id] || 'H'; if (status === 'H') H++; if (status === 'S') S++; if (status === 'I') I++; if (status === 'A') A++; }
                     return { 'No': i+1, 'NIS': s.nis, 'Nama': s.nama, 'Kelas': s.kelas, 'Hadir': H, 'Sakit': S, 'Izin': I, 'Alpa': A };
                 });
-                let wb = XLSX.utils.book_new();
-                let ws = XLSX.utils.json_to_sheet(rekap);
-                XLSX.utils.book_append_sheet(wb, ws, "Rekap Presensi");
-                XLSX.writeFile(wb, `Rekap_Presensi_Semester_Kelas_${k}.xlsx`);
+                let wb = XLSX.utils.book_new(); let ws = XLSX.utils.json_to_sheet(rekap); XLSX.utils.book_append_sheet(wb, ws, "Rekap Presensi"); XLSX.writeFile(wb, `Rekap_Presensi_Semester_Kelas_${k}.xlsx`);
             };
 
             const exportRekapNilaiExcelModulH = () => {
-                let k = filter.value.globalKelas;
-                let siswaKelas = datastore.value.siswa.filter(s => s.kelas === k);
+                let k = filter.value.globalKelas; let siswaKelas = datastore.value.siswa.filter(s => s.kelas === k);
                 if (siswaKelas.length === 0) return alert('Tidak ada siswa di kelas ' + k);
                 let is6 = isKelas6String(k);
                 let rekap = siswaKelas.map((s, i) => {
                     let row = { 'No': i+1, 'Nama Siswa': s.nama, 'Kelas': s.kelas };
-                    row['Rerata Formatif'] = hitungRerataKomponen(s.id, 'formatif');
-                    row['Rerata Sumatif'] = hitungRerataKomponen(s.id, 'sumatif');
-                    row['Rerata ASTS'] = hitungRerataKomponen(s.id, 'asts');
-                    row['Rerata ASAS'] = hitungRerataKomponen(s.id, 'asas');
-                    if (is6) {
-                        row['Ujian Praktik'] = getUjian6Obj(s.id).praktik || 0;
-                        row['Ujian Tertulis'] = getUjian6Obj(s.id).tertulis || 0;
-                    }
-                    row['NILAI AKHIR'] = hitungNilaiAkhir(s.id, k);
-                    return row;
+                    row['Rerata Formatif'] = hitungRerataKomponen(s.id, 'formatif'); row['Rerata Sumatif'] = hitungRerataKomponen(s.id, 'sumatif');
+                    row['Rerata ASTS'] = hitungRerataKomponen(s.id, 'asts'); row['Rerata ASAS'] = hitungRerataKomponen(s.id, 'asas');
+                    if (is6) { row['Ujian Praktik'] = getUjian6Obj(s.id).praktik || 0; row['Ujian Tertulis'] = getUjian6Obj(s.id).tertulis || 0; }
+                    row['NILAI AKHIR'] = hitungNilaiAkhir(s.id, k); return row;
                 });
-                let wb = XLSX.utils.book_new();
-                let ws = XLSX.utils.json_to_sheet(rekap);
-                XLSX.utils.book_append_sheet(wb, ws, "Rekap Nilai");
-                XLSX.writeFile(wb, `Rekap_Nilai_Akhir_Kelas_${k}.xlsx`);
+                let wb = XLSX.utils.book_new(); let ws = XLSX.utils.json_to_sheet(rekap); XLSX.utils.book_append_sheet(wb, ws, "Rekap Nilai"); XLSX.writeFile(wb, `Rekap_Nilai_Akhir_Kelas_${k}.xlsx`);
             };
 
-            const triggerPrintRekap = (type) => {
-                if (type === 'Presensi') {
-                    triggerPrint('Rekap Presensi Semester');
-                } else {
-                    triggerPrint('Olahan Nilai');
+            const triggerPrintRekap = (type) => { type === 'Presensi' ? triggerPrint('Rekap Presensi Semester') : triggerPrint('Olahan Nilai'); };
+
+            const prosesGantiSandi = () => {
+                firebaseStatus.value = {show:false};
+                if (!formGantiSandi.value.lama || !formGantiSandi.value.baru || !formGantiSandi.value.konfirmasi) return showFirebaseStatus('Semua kolom sandi wajib diisi!', 'error');
+                if (formGantiSandi.value.baru !== formGantiSandi.value.konfirmasi) return showFirebaseStatus('Konfirmasi sandi baru tidak cocok!', 'error');
+                
+                let usersDb = JSON.parse(localStorage.getItem('eunoia_users_db') || '{}');
+                let activeDb = usersDb[currentUser.value];
+                if (!activeDb) {
+                    if (currentUser.value === 'eunoia') { activeDb = { password: '12345', nama: 'Eunoia Admin', email: '' }; usersDb['eunoia'] = activeDb; } 
+                    else { return showFirebaseStatus('Gagal menemukan data pengguna.', 'error'); }
                 }
+                if (activeDb.password !== formGantiSandi.value.lama) return showFirebaseStatus('Sandi lama yang Anda masukkan salah!', 'error');
+                
+                activeDb.password = formGantiSandi.value.baru; localStorage.setItem('eunoia_users_db', JSON.stringify(usersDb));
+                settings.value.password = formGantiSandi.value.baru; saveToLocal();
+                formGantiSandi.value = { lama: '', baru: '', konfirmasi: '' }; showFirebaseStatus('Kata sandi berhasil diperbarui!', 'success');
             };
 
-            // --- LOGIKA MODUL PENGATURAN ---
             const tambahMapelOpt = () => {
-                let m = formInput.value.newMapel.trim();
-                if (m && !settings.value.listMapel.includes(m)) {
-                    settings.value.listMapel.push(m);
-                    formInput.value.newMapel = '';
-                }
+                let m = formInput.value.newMapel.trim(); if (m && !settings.value.listMapel.includes(m)) { settings.value.listMapel.push(m); formInput.value.newMapel = ''; }
             };
-
-            const hapusMapelOpt = (m) => {
-                settings.value.listMapel = settings.value.listMapel.filter(item => item !== m);
-                if (settings.value.mapelAktif === m) settings.value.mapelAktif = '';
-            };
+            const hapusMapelOpt = (m) => { settings.value.listMapel = settings.value.listMapel.filter(item => item !== m); if (settings.value.mapelAktif === m) settings.value.mapelAktif = ''; };
 
             const tambahKelasOpt = () => {
                 let k = formInput.value.newKelas ? formInput.value.newKelas.trim().toUpperCase() : '';
                 if (k) {
                     if (!settings.value.listKelas) settings.value.listKelas = ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'];
-                    if (!settings.value.listKelas.includes(k)) {
-                        settings.value.listKelas.push(k);
-                        settings.value.listKelas.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
-                        formInput.value.newKelas = '';
-                    }
+                    if (!settings.value.listKelas.includes(k)) { settings.value.listKelas.push(k); settings.value.listKelas.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'})); formInput.value.newKelas = ''; }
                 }
             };
-
             const hapusKelasOpt = (k) => {
-                if (confirm(`Menghapus kelas ${k} akan berpotensi mempengaruhi filter pencarian siswa. Lanjutkan?`)) {
+                if (confirm(`Hapus kelas ${k}?`)) {
                     if (!settings.value.listKelas) settings.value.listKelas = ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'];
                     settings.value.listKelas = settings.value.listKelas.filter(item => item !== k);
                 }
+            };
+
+            const formatTanggalIndo = (tglStr) => {
+                if (!tglStr) return '-'; return new Date(tglStr).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+            };
+
+            const triggerPrint = (modulName) => {
+                printMeta.value.judul = modulName; printMeta.value.fokusKelas = filter.value.globalKelas;
+                let rows = []; let headers = []; let keys = [];
+
+                switch (modulName) {
+                    case 'Data Siswa':
+                        headers = ['No', 'NIS', 'NISN', 'Nama Lengkap', 'Tempat, Tgl Lahir', 'Kelas']; keys = ['nis', 'nisn', 'nama', 'ttl', 'kelas'];
+                        rows = siswaTerfilterGlobal.value.map(s => ({ nis: s.nis, nisn: s.nisn || '-', nama: s.nama, ttl: s.ttl || '-', kelas: s.kelas })); break;
+                    case 'Presensi':
+                        headers = ['No', 'Nama Siswa', 'Kelas', 'Status Kehadiran']; keys = ['nama', 'kelas', 'status'];
+                        rows = siswaTerfilterPresensi.value.map(s => ({ nama: s.nama, kelas: s.kelas, status: datastore.value.presensi[filter.value.tanggalPresensi]?.[s.id] || 'H' })); break;
+                    case 'Input Nilai':
+                        headers = ['No', 'Nama Siswa', 'Formatif', 'Sumatif', 'ASTS', 'ASAS']; keys = ['nama', 'formatif', 'sumatif', 'asts', 'asas'];
+                        rows = siswaTerfilterNilai.value.map(s => { let o = getNilaiObj(s.id, filter.value.babNilai); return { nama: s.nama, formatif: o.formatif, sumatif: o.sumatif, asts: o.asts, asas: o.asas }; }); break;
+                    case 'Rekap Presensi Semester':
+                        headers = ['No', 'Nama Siswa', 'Kelas', 'Hadir', 'Sakit', 'Izin', 'Alpa']; keys = ['nama', 'kelas', 'H', 'S', 'I', 'A'];
+                        let siswaK = datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
+                        rows = siswaK.map(s => {
+                            let H = 0, S = 0, I = 0, A = 0;
+                            for (let tgl in datastore.value.presensi) { let status = datastore.value.presensi[tgl][s.id] || 'H'; if (status === 'H') H++; if (status === 'S') S++; if (status === 'I') I++; if (status === 'A') A++; }
+                            return { nama: s.nama, kelas: s.kelas, H, S, I, A };
+                        }); break;
+                    case 'Ujian Kelas 6':
+                        headers = ['No', 'Nama Siswa', 'Kelas Rombel', 'Ujian Praktik', 'Ujian Tertulis']; keys = ['nama', 'kelas', 'praktik', 'tertulis'];
+                        rows = siswaKelas6.value.map(s => { let o = getUjian6Obj(s.id); return { nama: s.nama, kelas: s.kelas, praktik: o.praktik, tertulis: o.tertulis }; }); break;
+                    case 'Olahan Nilai':
+                        let is6 = isKelas6String(filter.value.globalKelas);
+                        headers = is6 ? ['No', 'Nama Siswa', 'Form', 'Sum', 'ASTS', 'ASAS', 'Rapor (60%)', 'Prak', 'Tertulis', 'Ujian (40%)', 'N. AKHIR'] : ['No', 'Nama Siswa', 'Form', 'Sum', 'ASTS', 'ASAS', 'N. AKHIR'];
+                        keys = is6 ? ['nama', 'f', 's', 'asts', 'asas', 'rapor', 'p', 't', 'ujian', 'na'] : ['nama', 'f', 's', 'asts', 'asas', 'na'];
+                        rows = siswaTerfilterOlahan.value.map(s => ({
+                            nama: s.nama, f: hitungRerataKomponen(s.id, 'formatif'), s: hitungRerataKomponen(s.id, 'sumatif'), asts: hitungRerataKomponen(s.id, 'asts'),
+                            asas: hitungRerataKomponen(s.id, 'asas'), rapor: hitungNilaiAkademis(s.id), p: getUjian6Obj(s.id).praktik, t: getUjian6Obj(s.id).tertulis,
+                            ujian: hitungRerataUjian(s.id), na: hitungNilaiAkhir(s.id, filter.value.globalKelas)
+                        })); break;
+                    case 'Jurnal Mengajar':
+                        headers = ['No', 'Tanggal', 'Kelas', 'Materi Bahasan', 'Ketercapaian']; keys = ['tanggal', 'kelas', 'materi', 'pencapaian'];
+                        rows = [...jurnalTerfilter.value]; break;
+                    case 'Catatan Siswa':
+                        headers = ['No', 'Tanggal', 'Nama Siswa', 'Jenis', 'Poin', 'Uraian Catatan']; keys = ['tanggal', 'nama', 'jenis', 'poin', 'narasi'];
+                        rows = catatanTerfilter.value.map(c => ({ tanggal: c.tanggal ? formatTanggalIndo(c.tanggal) : '-', nama: getNamaSiswaById(c.siswaId), jenis: c.jenis || (c.tipe === 'Akademis' ? 'Tambah' : 'Kurang'), poin: c.poin || 0, narasi: c.narasi })); break;
+                }
+                printMeta.value.headers = headers; printMeta.value.keys = keys; printMeta.value.rows = rows;
+                showPrintPreview.value = true;
+            };
+
+            const executeNativePrint = () => {
+                const printContent = document.getElementById('print-area').innerHTML;
+                const printWindow = window.open('', '_blank');
+                if (printWindow) {
+                    printWindow.document.write(`
+                        <!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>${printMeta.value.judul}</title>
+                        <script src="https://cdn.tailwindcss.com"><\/script>
+                        <style> body { background-color: white; color: black; font-family: 'Times New Roman', Times, serif; padding: 40px; } table { width: 100%; border-collapse: collapse; margin-top: 15px; } th, td { border: 1px solid black !important; padding: 8px; text-align: left; font-size: 11px; } th { background-color: #f3f4f6 !important; text-align: center; font-weight: bold; } .text-center { text-align: center; } @media print { body { padding: 0; } .no-print { display: none !important; } } </style>
+                        </head><body><div class="max-w-4xl mx-auto">${printContent}</div>
+                        <script> window.onload = function() { setTimeout(function() { window.print(); }, 500); }; <\/script></body></html>
+                    `);
+                    printWindow.document.close();
+                } else { alert('Pop-up terblokir! Izinkan pop-up untuk mencetak dokumen.'); }
+            };
+
+            const copyRulesText = ref('Salin Kode');
+            const copyFirebaseRules = () => {
+                const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    // Memastikan koneksi database EUNOIA aman\n    match /{document=**} {\n      allow read, write: if request.auth != null;\n    }\n  }\n}`;
+                const textArea = document.createElement("textarea"); textArea.value = rules;
+                document.body.appendChild(textArea); textArea.select();
+                try { document.execCommand('copy'); copyRulesText.value = 'Berhasil Disalin!'; setTimeout(() => { copyRulesText.value = 'Salin Kode'; }, 2500); } catch (err) {}
+                document.body.removeChild(textArea);
             };
 
             const downloadBackupJSON = () => {
@@ -2824,221 +2488,32 @@ service cloud.firestore {
                 reader.readAsText(file);
             };
 
-            // --- ENGINE CORE DOKUMEN CETAK PDF ---
-            const triggerPrint = (modulName) => {
-                printMeta.value.judul = modulName;
-                printMeta.value.fokusKelas = filter.value.globalKelas;
-
-                let rows = [];
-                let headers = [];
-                let keys = [];
-
-                switch (modulName) {
-                    case 'Data Siswa':
-                        headers = ['No', 'NIS', 'NISN', 'Nama Lengkap', 'Tempat, Tgl Lahir', 'Kelas'];
-                        keys = ['nis', 'nisn', 'nama', 'ttl', 'kelas'];
-                        rows = siswaTerfilterGlobal.value.map(s => ({
-                            nis: s.nis,
-                            nisn: s.nisn || '-',
-                            nama: s.nama,
-                            ttl: s.ttl || '-',
-                            kelas: s.kelas
-                        }));
-                        break;
-                    case 'Presensi':
-                        headers = ['No', 'Nama Siswa', 'Kelas', 'Status Kehadiran'];
-                        keys = ['nama', 'kelas', 'status'];
-                        rows = siswaTerfilterPresensi.value.map(s => ({
-                            nama: s.nama, kelas: s.kelas, status: datastore.value.presensi[filter.value.tanggalPresensi]?.[s.id] || 'H'
-                        }));
-                        break;
-                    case 'Input Nilai':
-                        if(groupedBab.value.length === 0) return alert('Buat Bab/TP terlebih dahulu untuk dirender ke dalam cetakan PDF.');
-                        
-                        let fHeaders = [];
-                        let fKeys = [];
-                        groupedBab.value.forEach(g => {
-                            g.tps.forEach((tp, idx) => {
-                                fHeaders.push(`F.B${g.nomor}.T${idx+1}`); // Format Ringkas Cetak PDF: F.B1.T1
-                                fKeys.push(`f_${tp.id}`);
-                            });
-                        });
-                        
-                        let sHeaders = [];
-                        let sKeys = [];
-                        groupedBab.value.forEach(g => {
-                            sHeaders.push(`S.B${g.nomor}`); // Format Ringkas Cetak PDF: S.B1
-                            sKeys.push(`s_${g.nomor}`);
-                        });
-                        
-                        headers = ['No', 'Nama Siswa', ...fHeaders, ...sHeaders, 'ASTS', 'ASAS'];
-                        keys = ['nama', ...fKeys, ...sKeys, 'asts', 'asas'];
-                        rows = siswaTerfilterNilai.value.map(s => {
-                            let obj = { nama: s.nama };
-                            // Populate data ke field per-id
-                            groupedBab.value.forEach(g => {
-                                g.tps.forEach(tp => {
-                                    obj[`f_${tp.id}`] = getNilaiObj(s.id, tp.id).f1 || '-';
-                                });
-                                obj[`s_${g.nomor}`] = getNilaiObj(s.id, g.tps[0].id).sumatif || '-';
-                            });
-                            obj.asts = getNilaiObj(s.id, groupedBab.value[0].tps[0].id).asts || '-';
-                            obj.asas = getNilaiObj(s.id, groupedBab.value[0].tps[0].id).asas || '-';
-                            return obj;
-                        });
-                        break;
-                    case 'Rekap Presensi Semester':
-                        headers = ['No', 'Nama Siswa', 'Kelas', 'Hadir', 'Sakit', 'Izin', 'Alpa'];
-                        keys = ['nama', 'kelas', 'H', 'S', 'I', 'A'];
-                        let siswaK = datastore.value.siswa.filter(s => s.kelas === filter.value.globalKelas);
-                        rows = siswaK.map(s => {
-                            let H = 0, S = 0, I = 0, A = 0;
-                            for (let tgl in datastore.value.presensi) {
-                                let status = datastore.value.presensi[tgl][s.id] || 'H';
-                                if (status === 'H') H++;
-                                if (status === 'S') S++;
-                                if (status === 'I') I++;
-                                if (status === 'A') A++;
-                            }
-                            return { nama: s.nama, kelas: s.kelas, H, S, I, A };
-                        });
-                        break;
-                    case 'Ujian Kelas 6':
-                        headers = ['No', 'Nama Siswa', 'Kelas Rombel', 'Ujian Praktik', 'Ujian Tertulis'];
-                        keys = ['nama', 'kelas', 'praktik', 'tertulis'];
-                        rows = siswaKelas6.value.map(s => {
-                            let o = getUjian6Obj(s.id);
-                            return { nama: s.nama, kelas: s.kelas, praktik: o.praktik, tertulis: o.tertulis };
-                        });
-                        break;
-                    case 'Olahan Nilai':
-                        let is6 = isKelas6String(filter.value.globalKelas);
-                        headers = is6 ? ['No', 'Nama Siswa', 'Form', 'Sum', 'ASTS', 'ASAS', 'Rapor (60%)', 'Prak', 'Tertulis', 'Ujian (40%)', 'N. AKHIR'] 
-                                      : ['No', 'Nama Siswa', 'Form', 'Sum', 'ASTS', 'ASAS', 'N. AKHIR'];
-                        keys = is6 ? ['nama', 'f', 's', 'asts', 'asas', 'rapor', 'p', 't', 'ujian', 'na']
-                                   : ['nama', 'f', 's', 'asts', 'asas', 'na'];
-                        rows = siswaTerfilterOlahan.value.map(s => ({
-                            nama: s.nama,
-                            f: hitungRerataKomponen(s.id, 'formatif'),
-                            s: hitungRerataKomponen(s.id, 'sumatif'),
-                            asts: hitungRerataKomponen(s.id, 'asts'),
-                            asas: hitungRerataKomponen(s.id, 'asas'),
-                            rapor: hitungNilaiAkademis(s.id),
-                            p: getUjian6Obj(s.id).praktik,
-                            t: getUjian6Obj(s.id).tertulis,
-                            ujian: hitungRerataUjian(s.id),
-                            na: hitungNilaiAkhir(s.id, filter.value.globalKelas)
-                        }));
-                        break;
-                    case 'Jurnal Mengajar':
-                        headers = ['No', 'Tanggal', 'Kelas', 'Materi Bahasan', 'Ketercapaian'];
-                        keys = ['tanggal', 'kelas', 'materi', 'pencapaian'];
-                        rows = [...jurnalTerfilter.value];
-                        break;
-                    case 'Catatan Siswa':
-                        headers = ['No', 'Tanggal', 'Nama Siswa', 'Jenis', 'Poin', 'Uraian Catatan'];
-                        keys = ['tanggal', 'nama', 'jenis', 'poin', 'narasi'];
-                        rows = catatanTerfilter.value.map(c => ({
-                            tanggal: c.tanggal ? formatTanggalIndo(c.tanggal) : '-',
-                            nama: getNamaSiswaById(c.siswaId), 
-                            jenis: c.jenis || (c.tipe === 'Akademis' ? 'Tambah' : 'Kurang'), 
-                            poin: c.poin || 0,
-                            narasi: c.narasi
-                        }));
-                        break;
-                }
-
-                printMeta.value.headers = headers;
-                printMeta.value.keys = keys;
-                printMeta.value.rows = rows;
-
-                showPrintPreview.value = true;
-            };
-
-            const executeNativePrint = () => {
-                const printContent = document.getElementById('print-area').innerHTML;
-                const printWindow = window.open('', '_blank');
+            const groupedBab = computed(() => {
+                if (!filter.value.globalKelas) return [];
+                const babs = datastore.value.bab.filter(b => 
+                    (b.kelas === filter.value.globalKelas || (!b.kelas && filter.value.globalKelas === '1A')) &&
+                    (b.mapel === settings.value.mapelAktif || !b.mapel)
+                ).sort((a, b) => a.nomor - b.nomor);
                 
-                if (printWindow) {
-                    printWindow.document.write(`
-                        <!DOCTYPE html>
-                        <html lang="id">
-                        <head>
-                            <meta charset="UTF-8">
-                            <title>${printMeta.value.judul} - Kelas ${printMeta.value.fokusKelas}</title>
-                            <script src="https://cdn.tailwindcss.com"><\/script>
-                            <style>
-                                body {
-                                    background-color: white;
-                                    color: black;
-                                    font-family: 'Times New Roman', Times, serif;
-                                    padding: 40px;
-                                }
-                                table {
-                                    width: 100%;
-                                    border-collapse: collapse;
-                                    margin-top: 15px;
-                                }
-                                th, td {
-                                    border: 1px solid black !important;
-                                    padding: 8px;
-                                    text-align: left;
-                                    font-size: 11px;
-                                }
-                                th {
-                                    background-color: #f3f4f6 !important;
-                                    text-align: center;
-                                    font-weight: bold;
-                                }
-                                .text-center { text-align: center; }
-                                @media print {
-                                    body { padding: 0; }
-                                    .no-print { display: none !important; }
-                                }
-                            </style>
-                        </head>
-                        <body>
-                            <div class="max-w-4xl mx-auto">
-                                ${printContent}
-                            </div>
-                            <script>
-                                window.onload = function() {
-                                    setTimeout(function() {
-                                        window.print();
-                                    }, 500);
-                                };
-                            <\/script>
-                        </body>
-                        </html>
-                    `);
-                    printWindow.document.close();
-                } else {
-                    alert('Pop-up terblokir! Harap izinkan pop-up pada pengaturan browser Anda agar dapat mencetak dokumen.');
-                }
-            };
+                let groups = [];
+                babs.forEach(b => {
+                    let existingGroup = groups.find(g => g.nomor === b.nomor);
+                    if (existingGroup) {
+                        existingGroup.tps.push(b);
+                    } else {
+                        groups.push({ nomor: b.nomor, nama: b.nama, tps: [b] });
+                    }
+                });
+                return groups;
+            });
 
-            const formatTanggalIndo = (tglStr) => {
-                if (!tglStr) return '-';
-                const opsi = { year: 'numeric', month: 'long', day: 'numeric' };
-                return new Date(tglStr).toLocaleDateString('id-ID', opsi);
-            };
+            const totalTps = computed(() => {
+                return groupedBab.value.reduce((total, group) => total + group.tps.length, 0);
+            });
 
-            const copyRulesText = ref('Salin Kode');
-            const copyFirebaseRules = () => {
-                const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    // Memastikan koneksi database EUNOIA aman\n    match /{document=**} {\n      allow read, write: if request.auth != null;\n    }\n  }\n}`;
-                const textArea = document.createElement("textarea");
-                textArea.value = rules;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    copyRulesText.value = 'Berhasil Disalin!';
-                    setTimeout(() => { copyRulesText.value = 'Salin Kode'; }, 2500);
-                } catch (err) {
-                    console.error('Gagal menyalin text', err);
-                }
-                document.body.removeChild(textArea);
-            };
+            const totalBabs = computed(() => {
+                return groupedBab.value.length;
+            });
 
             return {
                 currentMenu,
